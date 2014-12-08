@@ -12,6 +12,8 @@
 #include <stdio.h>
 #include <string>
 #include <vector>
+#include <iostream>
+#include <sstream>
 
 #include "types.h"
 
@@ -88,12 +90,12 @@ private:
 public:
 	
 	// return number of alleles
-	int size();
+	int size() const;
 	
 	// return types contained
-	bool contains_snp();
-	bool contains_indel();
-	bool contains_other();
+	bool contains_snp() const;
+	bool contains_indel() const;
+	bool contains_other() const;
 	
 	// append allele
 	void append(const Allele &);

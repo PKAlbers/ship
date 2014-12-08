@@ -29,7 +29,7 @@ protected:
 	
 	size_t n; // number
 	double f; // frequency
-	bool n_, f_; // flag that number/frequency was provided
+	bool scaled_; // flag that number was scaled to yield frequency
 	
 public:
 	
@@ -38,20 +38,19 @@ public:
 	Census & operator -- ();
 	
 	// scale number/frequency given size
-	void scale(const unsigned long);
+	void scale(const size_t);
 	
 	// check if scaled
 	bool scaled() const;
 	
-	// assign values
-	void operator () (const unsigned long _n); // number
-	void operator () (const double _f);        // frequency
+	// assign count
+	Census & operator = (const size_t);
 	
 	// cast
-	explicit operator unsigned long () const;
-	explicit operator double        () const;
+	explicit operator size_t () const;
+	explicit operator double () const;
 	
-	// compare
+	// compare with other census container
 	bool operator <  (const Census & other) const;
 	bool operator >  (const Census & other) const;
 	bool operator <= (const Census & other) const;
@@ -59,17 +58,31 @@ public:
 	bool operator == (const Census & other) const;
 	bool operator != (const Census & other) const;
 	
+	// compare with count
+	bool operator <  (const size_t) const;
+	bool operator >  (const size_t) const;
+	bool operator <= (const size_t) const;
+	bool operator >= (const size_t) const;
+	bool operator == (const size_t) const;
+	bool operator != (const size_t) const;
+	
+	// compare with frequency
+	bool operator <  (const double) const;
+	bool operator >  (const double) const;
+	bool operator <= (const double) const;
+	bool operator >= (const double) const;
+	bool operator == (const double) const;
+	bool operator != (const double) const;
+	
 	// assign
 	Census & operator = (const Census &);
 	Census & operator = (Census &&);
 	
 	// construct
 	Census();
+	Census(const size_t);
 	Census(const Census &);
 	Census(Census &&);
-	
-	// destruct
-	//~Census();
 };
 
 
@@ -80,6 +93,9 @@ struct Cutoff : public Census
 {
 	// parse command line value
 	void parse(const std::string & str);
+	
+	// scale using sample size
+	void size(const size_t);
 };
 
 

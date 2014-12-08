@@ -9,6 +9,9 @@
 #include "census.h"
 
 
+#define DEBUG_CENSUS
+
+
 //******************************************************************************
 // Census container
 //******************************************************************************
@@ -20,26 +23,26 @@
 Census::Census()
 : n(0)
 , f(0)
-, n_(true)
-, f_(false)
+, scaled_(false)
+{}
+
+Census::Census(const size_t size)
+: n(size)
+, f(0)
+, scaled_(false)
 {}
 
 Census::Census(const Census & other)
 : n(other.n)
 , f(other.f)
-, n_(other.n_)
-, f_(other.f_)
+, scaled_(other.scaled_)
 {}
 
 Census::Census(Census && other)
 : n(other.n)
 , f(other.f)
-, n_(other.n_)
-, f_(other.f_)
+, scaled_(other.scaled_)
 {}
-
-//Census::~Census()
-//{}
 
 Census & Census::operator = (const Census & other)
 {
@@ -47,8 +50,7 @@ Census & Census::operator = (const Census & other)
 	{
 		this->n = other.n;
 		this->f = other.f;
-		this->n_ = other.n_;
-		this->f_ = other.f_;
+		this->scaled_ = other.scaled_;
 	}
 	return *this;
 }
@@ -59,100 +61,257 @@ Census & Census::operator = (Census && other)
 	{
 		this->n = other.n;
 		this->f = other.f;
-		this->n_ = other.n_;
-		this->f_ = other.f_;
+		this->scaled_ = other.scaled_;
 	}
 	return *this;
 }
 
-bool Census::operator <  (const Census & other) const { return ((this->n_ && other.n_ && this->n <  other.n) || (this->f_ && other.f_ && this->f <  other.f)); }
-bool Census::operator >  (const Census & other) const { return ((this->n_ && other.n_ && this->n >  other.n) || (this->f_ && other.f_ && this->f >  other.f)); }
-bool Census::operator <= (const Census & other) const { return ((this->n_ && other.n_ && this->n <= other.n) || (this->f_ && other.f_ && this->f <= other.f)); }
-bool Census::operator >= (const Census & other) const { return ((this->n_ && other.n_ && this->n >= other.n) || (this->f_ && other.f_ && this->f >= other.f)); }
-bool Census::operator == (const Census & other) const { return ((this->n_ && other.n_ && this->n == other.n) || (this->f_ && other.f_ && this->f == other.f)); }
-bool Census::operator != (const Census & other) const { return ((this->n_ && other.n_ && this->n != other.n) || (this->f_ && other.f_ && this->f != other.f)); }
-
-Census::operator unsigned long () const
+bool Census::operator <  (const Census & other) const
 {
-	if (this->n_)
-		return this->n;
-	throw std::runtime_error("Number not provided in census");
-	return 0;
+#ifdef DEBUG_CENSUS
+	if (!this->scaled_ || !other.scaled_)
+	{
+		throw std::logic_error("Census was not scaled");
+	}
+#endif
+	return (this->n < other.n);
+}
+
+bool Census::operator >  (const Census & other) const
+{
+#ifdef DEBUG_CENSUS
+	if (!this->scaled_ || !other.scaled_)
+	{
+		throw std::logic_error("Census was not scaled");
+	}
+#endif
+	return (this->n > other.n);
+}
+
+bool Census::operator <= (const Census & other) const
+{
+#ifdef DEBUG_CENSUS
+	if (!this->scaled_ || !other.scaled_)
+	{
+		throw std::logic_error("Census was not scaled");
+	}
+#endif
+	return (this->n <= other.n);
+}
+
+bool Census::operator >= (const Census & other) const
+{
+#ifdef DEBUG_CENSUS
+	if (!this->scaled_ || !other.scaled_)
+	{
+		throw std::logic_error("Census was not scaled");
+	}
+#endif
+	return (this->n >= other.n);
+}
+
+bool Census::operator == (const Census & other) const
+{
+#ifdef DEBUG_CENSUS
+	if (!this->scaled_ || !other.scaled_)
+	{
+		throw std::logic_error("Census was not scaled");
+	}
+#endif
+	return (this->n == other.n);
+}
+
+bool Census::operator != (const Census & other) const
+{
+#ifdef DEBUG_CENSUS
+	if (!this->scaled_ || !other.scaled_)
+	{
+		throw std::logic_error("Census was not scaled");
+	}
+#endif
+	return (this->n != other.n);
+}
+
+bool Census::operator < (const size_t _n) const
+{
+#ifdef DEBUG_CENSUS
+	if (!this->scaled_)
+	{
+		throw std::logic_error("Census was not scaled");
+	}
+#endif
+	return (this->n < _n);
+}
+
+bool Census::operator > (const size_t _n) const
+{
+#ifdef DEBUG_CENSUS
+	if (!this->scaled_)
+	{
+		throw std::logic_error("Census was not scaled");
+	}
+#endif
+	return (this->n > _n);
+}
+
+bool Census::operator <= (const size_t _n) const
+{
+#ifdef DEBUG_CENSUS
+	if (!this->scaled_)
+	{
+		throw std::logic_error("Census was not scaled");
+	}
+#endif
+	return (this->n <= _n);
+}
+
+bool Census::operator >= (const size_t _n) const
+{
+#ifdef DEBUG_CENSUS
+	if (!this->scaled_)
+	{
+		throw std::logic_error("Census was not scaled");
+	}
+#endif
+	return (this->n >= _n);
+}
+
+bool Census::operator == (const size_t _n) const
+{
+#ifdef DEBUG_CENSUS
+	if (!this->scaled_)
+	{
+		throw std::logic_error("Census was not scaled");
+	}
+#endif
+	return (this->n == _n);
+}
+
+bool Census::operator != (const size_t _n) const
+{
+#ifdef DEBUG_CENSUS
+	if (!this->scaled_)
+	{
+		throw std::logic_error("Census was not scaled");
+	}
+#endif
+	return (this->n != _n);
+}
+
+bool Census::operator < (const double _f) const
+{
+#ifdef DEBUG_CENSUS
+	if (!this->scaled_)
+	{
+		throw std::logic_error("Census was not scaled");
+	}
+#endif
+	return (this->f < _f);
+}
+
+bool Census::operator > (const double _f) const
+{
+#ifdef DEBUG_CENSUS
+	if (!this->scaled_)
+	{
+		throw std::logic_error("Census was not scaled");
+	}
+#endif
+	return (this->f > _f);
+}
+
+bool Census::operator <= (const double _f) const
+{
+#ifdef DEBUG_CENSUS
+	if (!this->scaled_)
+	{
+		throw std::logic_error("Census was not scaled");
+	}
+#endif
+	return (this->f <= _f);
+}
+
+bool Census::operator >= (const double _f) const
+{
+#ifdef DEBUG_CENSUS
+	if (!this->scaled_)
+	{
+		throw std::logic_error("Census was not scaled");
+	}
+#endif
+	return (this->f >= _f);
+}
+
+bool Census::operator == (const double _f) const
+{
+#ifdef DEBUG_CENSUS
+	if (!this->scaled_)
+	{
+		throw std::logic_error("Census was not scaled");
+	}
+#endif
+	return (this->f == _f);
+}
+
+bool Census::operator != (const double _f) const
+{
+#ifdef DEBUG_CENSUS
+	if (!this->scaled_)
+	{
+		throw std::logic_error("Census was not scaled");
+	}
+#endif
+	return (this->f != _f);
+}
+
+Census::operator size_t () const
+{
+	return this->n;
 };
 
 Census::operator double () const
 {
-	if (this->f_)
-		return this->f;
-	throw std::runtime_error("Frequency not provided in census");
-	return 0;
+	return this->f;
 };
 
-void Census::operator () (const unsigned long _n)
+Census & Census::operator = (const size_t _n)
 {
 	this->n = _n;
-	this->n_ = true;
-	this->f_ = false;
+	return *this;
 }
 
-void Census::operator () (const double _f)
+void Census::scale(const size_t _size)
 {
-	if (_f > 1)
-		throw std::logic_error("Cannot use frequency larger than 1");
-	
-	this->f = _f;
-	this->f_ = true;
-	this->n_ = false;
-}
-
-void Census::scale(const unsigned long size)
-{
-	if (! this->n_ && this->f_)
+	if (this->n > _size)
 	{
-		this->n  = this->f * static_cast<double>(size);
-		this->n_ = true;
-		return;
+		throw std::logic_error("Cannot scale frequency with size larger than count");
 	}
 	
-	if (! this->f_ && this->n_)
-	{
-		if (this->n > size)
-			throw std::logic_error("Cannot scale frequency with size larger than count");
-		
-		this->f  = static_cast<double>(this->n) / static_cast<double>(size);
-		this->f_ = true;
-		return;
-	}
-	
-	throw std::logic_error("Cannot scale census due to unknown count and frequency");
+	this->f = static_cast<double>(this->n) / static_cast<double>(_size);
+	this->scaled_ = true;
 }
 
 bool Census::scaled() const
 {
-	return (this->n_ && this->f_);
+	return this->scaled_;
 }
 
 Census & Census::operator ++ ()
 {
-	this->n += 1;
-	this->n_ = true;
-	
-	this->f  = 0;
-	this->f_ = false;
-	
+	++this->n;
+	this->scaled_ = false;
 	return *this;
 }
 
 Census & Census::operator -- ()
 {
 	if (this->n == 0)
+	{
 		throw std::runtime_error("Cannot decrement zero count");
+	}
 	
-	this->n -= 1;
-	this->n_ = true;
-	
-	this->f  = 0;
-	this->f_ = false;
+	--this->n;
+	this->scaled_ = false;
 	return *this;
 }
 
@@ -175,13 +334,9 @@ void Cutoff::parse(const std::string & str)
 			{
 				throw std::invalid_argument("Threshold frequency cannot be larger than 1");
 			}
-			else
-			{
-				this->n  = static_cast<unsigned long>(value);
-				this->n_ = true;
-				this->f_ = false;
-				return;
-			}
+			
+			this->n = static_cast<unsigned long>(value);
+			return;
 		}
 		
 		// frequency
@@ -189,17 +344,31 @@ void Cutoff::parse(const std::string & str)
 		{
 			throw std::invalid_argument("Threshold value cannot be smaller than 0");
 		}
-		else
-		{
-			this->f  = value;
-			this->f_ = true;
-			this->n_ = false;
-			return;
-		}
 		
+		this->f  = value;
+		return;
 	}
 	
 	throw std::invalid_argument("Cannot interpret threshold value: " + str);
+}
+
+void Cutoff::size(const size_t _size)
+{
+	if (this->n > 0 && this->f == 0)
+	{
+		this->f = static_cast<double>(this->n) / static_cast<double>(_size);
+		this->scaled_ = true;
+		return;
+	}
+	
+	if (this->f > 0 && this->n == 0)
+	{
+		this->n = static_cast<size_t>(this->f * static_cast<double>(_size));
+		this->scaled_ = true;
+		return;
+	}
+	
+	throw std::logic_error("Cannot scale threshold");
 }
 
 

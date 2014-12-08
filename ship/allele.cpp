@@ -233,33 +233,40 @@ const Allele & AlleleList::operator [] (const Haplotype & haplotype) const
     return this->list_[i];
 }
 
-bool AlleleList::contains_snp()
+bool AlleleList::contains_snp() const
 {
     return this->contains_snp_;
 }
 
-bool AlleleList::contains_indel()
+bool AlleleList::contains_indel() const
 {
     return this->contains_indel_;
 }
 
-bool AlleleList::contains_other()
+bool AlleleList::contains_other() const
 {
     return this->contains_other_;
 }
 
-int AlleleList::size()
+int AlleleList::size() const
 {
     return this->size_;
 }
 
 void AlleleList::print(std::ostream & stream, const char last) const
 {
-    char sep = NULL;
-    for (int i = 0; i < this->size_; ++i)
+    if (this->size_ == 0)
     {
-        stream << sep << i << ':' << this->list_[i].base();
-        sep = ',';
+        stream << '.';
+    }
+    else
+    {
+        char sep = NULL;
+        for (int i = 0; i < this->size_; ++i)
+        {
+            stream << sep << i << ':' << this->list_[i].base();
+            sep = ',';
+        }
     }
     if (last != '\0')
         stream << last;
@@ -267,11 +274,18 @@ void AlleleList::print(std::ostream & stream, const char last) const
 
 void AlleleList::print(FILE * fp, const char last) const
 {
-    char sep = NULL;
-    for (int i = 0; i < this->size_; ++i)
+    if (this->size_ == 0)
     {
-        fprintf(fp, "%c%d:%s", sep, i, this->list_[i].base().c_str());
-        sep = ',';
+        fprintf(fp, ".");
+    }
+    else
+    {
+        char sep = NULL;
+        for (int i = 0; i < this->size_; ++i)
+        {
+            fprintf(fp, "%c%d:%s", sep, i, this->list_[i].base().c_str());
+            sep = ',';
+        }
     }
     if (last != '\0')
         fprintf(fp, "%c", last);

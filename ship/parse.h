@@ -126,7 +126,17 @@ inline bool parse_vcf_line(const char * line, MarkerInfo & info, MarkerData & da
 					g.h0 = parse.token[0];
 					g.h1 = parse.token[2];
 					
-					data.append(g);
+					if (! data.append(g))
+					{
+						comment = "More genotypes than expected (exceeds " + std::to_string(data.size()) + ")";
+						return false;
+					}
+				}
+				
+				if (! data.is_complete())
+				{
+					comment = "Less genotypes than expected (" + std::to_string(data.count()) + " found, " + std::to_string(data.size()) + " expected)";
+					return false;
 				}
 				
 				break;
