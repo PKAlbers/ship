@@ -13,6 +13,8 @@
 #include <string>
 #include <vector>
 
+#include "types.h"
+
 
 //******************************************************************************
 // Allele container
@@ -99,7 +101,15 @@ public:
 	
 	// return allele
 	const Allele & operator [] (const int) const;
+    const Allele & operator [] (const Haplotype &) const;
 	
+    // print to stream
+    void print(std::ostream &, const char = '\0') const;
+    void print(FILE *, const char = '\0') const;
+    
+    // convert to string
+    std::string str() const;
+    
 	// assign
 	AlleleList & operator = (const AlleleList &);
 	AlleleList & operator = (AlleleList &&);

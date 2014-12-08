@@ -213,12 +213,76 @@ void AlleleList::append(Allele && allele)
 
 const Allele & AlleleList::operator [] (const int i) const
 {
-	if (i < 0 || i >= this->size_)
-	{
-		throw std::out_of_range("No allele defined for '" + std::to_string(i) + "'");
-	}
-	
-	return this->list_[i];
+    if (i < 0 || i >= this->size_)
+    {
+        throw std::out_of_range("No allele defined for '" + std::to_string(i) + "'");
+    }
+    
+    return this->list_[i];
+}
+
+const Allele & AlleleList::operator [] (const Haplotype & haplotype) const
+{
+    const int i = (int)haplotype;
+    
+    if (i < 0 || i >= this->size_)
+    {
+        throw std::out_of_range("No allele defined for haplotype '" + std::to_string(i) + "'");
+    }
+    
+    return this->list_[i];
+}
+
+bool AlleleList::contains_snp()
+{
+    return this->contains_snp_;
+}
+
+bool AlleleList::contains_indel()
+{
+    return this->contains_indel_;
+}
+
+bool AlleleList::contains_other()
+{
+    return this->contains_other_;
+}
+
+int AlleleList::size()
+{
+    return this->size_;
+}
+
+void AlleleList::print(std::ostream & stream, const char last) const
+{
+    char sep = NULL;
+    for (int i = 0; i < this->size_; ++i)
+    {
+        stream << sep << i << ':' << this->list_[i].base();
+        sep = ',';
+    }
+    if (last != '\0')
+        stream << last;
+}
+
+void AlleleList::print(FILE * fp, const char last) const
+{
+    char sep = NULL;
+    for (int i = 0; i < this->size_; ++i)
+    {
+        fprintf(fp, "%c%d:%s", sep, i, this->list_[i].base().c_str());
+        sep = ',';
+    }
+    if (last != '\0')
+        fprintf(fp, "%c", last);
+}
+
+
+std::string AlleleList::str() const
+{
+    std::ostringstream oss;
+    this->print(oss);
+    return oss.str();
 }
 
 
