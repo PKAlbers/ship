@@ -100,8 +100,8 @@ void Source::append(Marker && marker)
 		this->sample_[i].data.append(marker.data[i]);
 	}
 	
-	// remove marker data
-	marker.data.remove();
+	// clear marker data
+	marker.data.clear();
 	
 	// append marker
 	this->marker_.push_back(std::move(marker)); // move

@@ -14,7 +14,7 @@
 
 #include "types.h"
 #include "timer.h"
-#include "input.h"
+//#include "input.h"
 #include "sample.h"
 #include "marker.h"
 #include "genmap.h"
@@ -237,6 +237,7 @@ int main(int argc, const char * argv[])
 		return 1;
 	}
 	
+	/*
 	
 	//
 	// Assume chromosome
@@ -346,6 +347,8 @@ int main(int argc, const char * argv[])
 //	std::string x;
 //	std::cin >> x;
 	
+	 */
+	 
 	std::cout << std::endl << "Done!" << std::endl << runtime.str() << std::endl;
 	
 	return 0;

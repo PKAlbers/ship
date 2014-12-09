@@ -13,7 +13,7 @@
 #include <iostream>
 #include <vector>
 #include <string>
-#include <unordered_map>
+#include <map>
 #include <sstream>
 #include <iomanip>
 #include <utility>
@@ -38,6 +38,7 @@ private:
 	size_t     size_; // full size
 	size_t     i;     // increment for appending
 	bool contains_unknown_; // flag that data contains unknown haplotypes
+	bool cleared; // flag that data was cleared
 	
 public:
 	
@@ -54,14 +55,21 @@ public:
 	// return size
 	size_t size() const;
 	
-	// return current
+	// return current count
 	size_t count() const;
 	
 	// append element
 	bool append(const Genotype &);
 	
 	// remove all data
-	void remove();
+	void clear();
+	
+	// print to stream
+	void print(std::ostream &, const char = '\0') const;
+	void print(FILE *, const char = '\0') const;
+	
+	// convert to string
+	std::string str() const;
 	
 	// assign
 	MarkerData & operator = (const MarkerData &);
@@ -121,23 +129,19 @@ struct MarkerInfo
 // Marker statistics
 //
 
-template <class>
-class MarkerSelect;
-
 class MarkerStat
 {
 private:
 	
 	bool evaluated; // flag that stats were calculated
-	std::unordered_map<Haplotype, Census> census_h; // expected haplotypes (alleles)
-	std::unordered_map<Genotype,  Census> census_g; // expected genotypes
-	std::vector<Haplotype> index_h; // order of haplotypes
-	std::vector<Genotype>  index_g; // order of genotypes
 	
 public:
 	
+	std::map<Haplotype, Census> haplostat; // expected haplotypes (alleles)
+	std::map<Genotype,  Census> genostat; // expected genotypes
+	
 	// evaluate allele list and genotype data
-	void evaluate(const MarkerInfo &, const MarkerData &);
+	bool evaluate(const MarkerInfo &, const MarkerData &);
 	
 	// return census statistics
 	const Census & operator [] (const Haplotype &) const;
@@ -164,216 +168,7 @@ public:
 	
 	// destruct
 	~MarkerStat();
-	
-	friend class MarkerSelect<Haplotype>;
-	friend class MarkerSelect<Genotype>;
 };
-
-template <class TYPE>
-class MarkerSelect
-{
-private:
-	
-	const MarkerStat * stat;
-	
-public:
-	
-	std::vector< typename std::unordered_map<TYPE, Census>::const_iterator > operator <  (const Census &) const;
-	std::vector< typename std::unordered_map<TYPE, Census>::const_iterator > operator >  (const Census &) const;
-	std::vector< typename std::unordered_map<TYPE, Census>::const_iterator > operator <= (const Census &) const;
-	std::vector< typename std::unordered_map<TYPE, Census>::const_iterator > operator >= (const Census &) const;
-	
-	MarkerSelect(const MarkerStat &);
-};
-
-template <class TYPE>
-MarkerSelect<TYPE>::MarkerSelect(const MarkerStat & _stat)
-: stat(&_stat)
-{
-#ifdef DEBUG_MARKER
-	if (!stat->evaluated)
-	{
-		throw std::logic_error("Marker statistics not calculated");
-	}
-#endif
-}
-
-template<> std::vector< std::unordered_map<Haplotype, Census>::const_iterator > MarkerSelect<Haplotype>::operator < (const Census & census) const
-{
-#ifdef DEBUG_MARKER
-	if (!stat->evaluated)
-	{
-		throw std::logic_error("Marker statistics not calculated");
-	}
-#endif
-	
-	std::vector< std::unordered_map<Haplotype, Census>::const_iterator > selected;
-	
-	for (std::unordered_map<Haplotype, Census>::const_iterator it = stat->census_h.cbegin(), end = stat->census_h.cend(); it != end; ++it)
-	{
-		if (it->second < census)
-		{
-			selected.push_back(it);
-		}
-	}
-	
-	return selected;
-}
-
-template<> std::vector< std::unordered_map<Haplotype, Census>::const_iterator > MarkerSelect<Haplotype>::operator > (const Census & census) const
-{
-#ifdef DEBUG_MARKER
-	if (!stat->evaluated)
-	{
-		throw std::logic_error("Marker statistics not calculated");
-	}
-#endif
-	
-	std::vector< std::unordered_map<Haplotype, Census>::const_iterator > selected;
-	
-	for (std::unordered_map<Haplotype, Census>::const_iterator it = stat->census_h.cbegin(), end = stat->census_h.cend(); it != end; ++it)
-	{
-		if (it->second > census)
-		{
-			selected.push_back(it);
-		}
-	}
-	
-	return selected;
-}
-
-template<> std::vector< std::unordered_map<Haplotype, Census>::const_iterator > MarkerSelect<Haplotype>::operator <= (const Census & census) const
-{
-#ifdef DEBUG_MARKER
-	if (!stat->evaluated)
-	{
-		throw std::logic_error("Marker statistics not calculated");
-	}
-#endif
-	
-	std::vector< std::unordered_map<Haplotype, Census>::const_iterator > selected;
-	
-	for (std::unordered_map<Haplotype, Census>::const_iterator it = stat->census_h.cbegin(), end = stat->census_h.cend(); it != end; ++it)
-	{
-		if (it->second <= census)
-		{
-			selected.push_back(it);
-		}
-	}
-	
-	return selected;
-}
-
-template<> std::vector< std::unordered_map<Haplotype, Census>::const_iterator > MarkerSelect<Haplotype>::operator >= (const Census & census) const
-{
-#ifdef DEBUG_MARKER
-	if (!stat->evaluated)
-	{
-		throw std::logic_error("Marker statistics not calculated");
-	}
-#endif
-	
-	std::vector< std::unordered_map<Haplotype, Census>::const_iterator > selected;
-	
-	for (std::unordered_map<Haplotype, Census>::const_iterator it = stat->census_h.cbegin(), end = stat->census_h.cend(); it != end; ++it)
-	{
-		if (it->second >= census)
-		{
-			selected.push_back(it);
-		}
-	}
-	
-	return selected;
-}
-
-template<> std::vector< std::unordered_map<Genotype, Census>::const_iterator > MarkerSelect<Genotype>::operator < (const Census & census) const
-{
-#ifdef DEBUG_MARKER
-	if (!stat->evaluated)
-	{
-		throw std::logic_error("Marker statistics not calculated");
-	}
-#endif
-	
-	std::vector< std::unordered_map<Genotype, Census>::const_iterator > selected;
-	
-	for (std::unordered_map<Genotype, Census>::const_iterator it = stat->census_g.cbegin(), end = stat->census_g.cend(); it != end; ++it)
-	{
-		if (it->second < census)
-		{
-			selected.push_back(it);
-		}
-	}
-	
-	return selected;
-}
-
-template<> std::vector< std::unordered_map<Genotype, Census>::const_iterator > MarkerSelect<Genotype>::operator > (const Census & census) const
-{
-#ifdef DEBUG_MARKER
-	if (!stat->evaluated)
-	{
-		throw std::logic_error("Marker statistics not calculated");
-	}
-#endif
-	
-	std::vector< std::unordered_map<Genotype, Census>::const_iterator > selected;
-	
-	for (std::unordered_map<Genotype, Census>::const_iterator it = stat->census_g.cbegin(), end = stat->census_g.cend(); it != end; ++it)
-	{
-		if (it->second > census)
-		{
-			selected.push_back(it);
-		}
-	}
-	
-	return selected;
-}
-
-template<> std::vector< std::unordered_map<Genotype, Census>::const_iterator > MarkerSelect<Genotype>::operator <= (const Census & census) const
-{
-#ifdef DEBUG_MARKER
-	if (!stat->evaluated)
-	{
-		throw std::logic_error("Marker statistics not calculated");
-	}
-#endif
-	
-	std::vector< std::unordered_map<Genotype, Census>::const_iterator > selected;
-	
-	for (std::unordered_map<Genotype, Census>::const_iterator it = stat->census_g.cbegin(), end = stat->census_g.cend(); it != end; ++it)
-	{
-		if (it->second <= census)
-		{
-			selected.push_back(it);
-		}
-	}
-	
-	return selected;
-}
-
-template<> std::vector< std::unordered_map<Genotype, Census>::const_iterator > MarkerSelect<Genotype>::operator >= (const Census & census) const
-{
-#ifdef DEBUG_MARKER
-	if (!stat->evaluated)
-	{
-		throw std::logic_error("Marker statistics not calculated");
-	}
-#endif
-	
-	std::vector< std::unordered_map<Genotype, Census>::const_iterator > selected;
-	
-	for (std::unordered_map<Genotype, Census>::const_iterator it = stat->census_g.cbegin(), end = stat->census_g.cend(); it != end; ++it)
-	{
-		if (it->second >= census)
-		{
-			selected.push_back(it);
-		}
-	}
-	
-	return selected;
-}
-
 
 
 //
@@ -409,9 +204,6 @@ struct MarkerGmap
 	MarkerGmap(); // default
 	MarkerGmap(const MarkerGmap &); // copy
 	MarkerGmap(MarkerGmap &&); // move
-	
-	// destruct
-	//~MarkerGmap();
 };
 
 

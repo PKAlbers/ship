@@ -59,24 +59,35 @@ private:
 	std::vector<Block> collect;
 	std::vector<Block>::reverse_iterator current;
 	
-	Datatype * data;
-	size_t size_;
-	bool good;
+	Datatype * data_;
+	size_t     size_;
+	bool finished;
+	bool cleared;
 	
 public:
 	
 	// append type
-	void append(Datatype &&);
-	void append(Genotype &&);
+	void append(const Genotype &);
 	
 	// compile types from data blocks
 	void finish();
 	
-	unsigned long size() const;
+	// clear all data
+	void clear();
+	
+	// return size
+	size_t size() const;
 	
 	// return type
-	Datatype operator [] (const unsigned long) const;
-	const Datatype & at(const unsigned long) const;
+	Datatype operator [] (const size_t) const;
+	const Datatype & at(const size_t) const;
+	
+	// print to stream
+	void print(std::ostream &, const char = '\0') const;
+	void print(FILE *, const char = '\0') const;
+	
+	// convert to string
+	std::string str() const;
 	
 	// assign
 	SampleData & operator = (const SampleData &);
@@ -98,20 +109,20 @@ public:
 struct SampleInfo
 {
 	std::string key; // unique sample identifier
-	std::string sup; // super population
-	std::string sub; // sub-population
+	std::string pop; // population
 	
 	static const std::string unknown_key; // unknown individual ID
-	static const std::string unknown_grp; // unknown super population group
-	static const std::string unknown_pop; // unknown sub-population
+	static const std::string unknown_pop; // unknown population
 	
-	// compare
+	// compare/sort
+	bool operator <  (const SampleInfo & other) const;
+	bool operator >  (const SampleInfo & other) const;
 	bool operator == (const SampleInfo & other) const;
 	bool operator != (const SampleInfo & other) const;
 	
 	// print to stream
-	void print(std::ostream &, const char = NULL) const;
-	void print(FILE *, const char = NULL) const;
+	void print(std::ostream &, const char = '\0') const;
+	void print(FILE *, const char = '\0') const;
 	
 	// convert to string
 	std::string str() const;

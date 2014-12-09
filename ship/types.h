@@ -23,8 +23,6 @@
 // Genetic data types
 //******************************************************************************
 
-typedef uint8_t Byte;
-
 class Chromosome;
 class Haplotype;
 class Genotype;
@@ -38,20 +36,20 @@ class Chromosome
 {
 private:
 	
-	Byte value;
+	char value;
 	
 public:
 	
 	// check if unknown
 	bool is_unknown() const
 	{
-		return (this->value == 0);
+		return (this->value == -1);
 	}
 	
 	// cast
 	operator int () const
 	{
-		return (this->value == 0) ? -1: static_cast<int>(this->value - 1);
+		return static_cast<int>(this->value);
 	}
 	
 	// compare
@@ -72,7 +70,7 @@ public:
 	}
 	Chromosome & operator = (const int i)
 	{
-		this->value = (i < 1 || i > CHAR_MAX - 1)? 0: i + 1; // reserve 0 for unknown
+		this->value = (i < 1 || i > CHAR_MAX)? -1: i; // reserve -1 for unknown
 		return *this;
 	}
 	
@@ -82,7 +80,7 @@ public:
 	{}
 	Chromosome(const int i)
 	{
-		this->value = (i < 1 || i > CHAR_MAX - 1)? 0: i + 1; // reserve 0 for unknown
+		this->value = (i < 1 || i > CHAR_MAX)? -1: i; // reserve -1 for unknown
 	}
 	
 	friend class std::hash<Chromosome>;
@@ -92,38 +90,36 @@ public:
 //
 // Haplotype element
 //
+
+#define HAPLOTYPE_MAX 14 // = 15 (00001111) - 1 (reserved for unknown)
+
 class Haplotype
 {
 private:
 	
-	Byte value;
+	unsigned char value;
 	
 public:
 	
+	static const unsigned char unknown = HAPLOTYPE_MAX + 1; // unknown haplotype
+	
 	bool is_unknown() const
 	{
-		return (this->value == 0);
+		return (this->value == HAPLOTYPE_MAX + 1);
 	}
 	
 	// cast
 	operator int () const
 	{
-		return (this->value == 0) ? -1: static_cast<int>(this->value - 1);
-	}
-	operator char () const
-	{
-		return (this->value == 0) ? '.': static_cast<char>(this->value - 1);
+		return (this->value == HAPLOTYPE_MAX + 1) ? -1: static_cast<int>(this->value);
 	}
 	
-	// compare
-	bool operator == (const Haplotype & other)
-	{
-		return (this->value == other.value);
-	}
-	bool operator != (const Haplotype & other)
-	{
-		return (this->value != other.value);
-	}
+	// compare/sort
+	bool operator <  (const Haplotype & other) { return (this->value <  other.value); }
+	bool operator >  (const Haplotype & other) { return (this->value >  other.value); }
+	bool operator == (const Haplotype & other) { return (this->value == other.value); }
+	bool operator != (const Haplotype & other) { return (this->value != other.value); }
+	
 	
 	// assign
 	Haplotype & operator = (const Haplotype & other)
@@ -133,12 +129,7 @@ public:
 	}
 	Haplotype & operator = (const int i)
 	{
-		this->value = (i < 0 || i > 9) ? 0: i + 1; // reserve 0 for unknown
-		return *this;
-	}
-	Haplotype & operator = (const char c)
-	{
-		this->value = (c < '0' || c > '9')? 0: (c - '0') + 1; // reserve 0 for unknown
+		this->value = (i < 0 || i > HAPLOTYPE_MAX) ? HAPLOTYPE_MAX + 1: i; // reserve 15 (00001111) for unknown
 		return *this;
 	}
 	
@@ -148,13 +139,10 @@ public:
 	{}
 	Haplotype(const int i)
 	{
-		this->value = (i < 0 || i > 9) ? 0: i + 1; // reserve 0 for unknown
-	}
-	Haplotype(const char c)
-	{
-		this->value = (c < '0' || c > '9')? 0: (c - '0') + 1; // reserve 0 for unknown
+		this->value = (i < 0 || i > HAPLOTYPE_MAX) ? HAPLOTYPE_MAX + 1: i; // reserve 15 (00001111) for unknown
 	}
 	
+	friend class Genotype;
 	friend class Datatype;
 	friend class std::hash<Haplotype>;
 	friend class std::hash<Genotype>;
@@ -170,6 +158,12 @@ public:
 	
 	Haplotype h0; // 1st haplotype
 	Haplotype h1; // 2nd haplotype
+	
+	// compare/sort
+	bool operator <  (const Genotype & other) { return (this->h0 == other.h0) ? (this->h1 <  other.h1): (this->h0 <  other.h0); }
+	bool operator >  (const Genotype & other) { return (this->h0 == other.h0) ? (this->h1 >  other.h1): (this->h0 >  other.h0); }
+	bool operator == (const Genotype & other) { return (this->h0 == other.h0  && this->h1 == other.h1); }
+	bool operator != (const Genotype & other) { return (this->h0 != other.h0  || this->h1 != other.h1); }
 	
 	// construct
 	Genotype()
@@ -188,7 +182,7 @@ class Datatype
 {
 private:
 	
-	Byte value;
+	unsigned char value;
 	
 public:
 	

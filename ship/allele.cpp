@@ -221,16 +221,9 @@ const Allele & AlleleList::operator [] (const int i) const
     return this->list_[i];
 }
 
-const Allele & AlleleList::operator [] (const Haplotype & haplotype) const
+bool AlleleList::operator () (const int i) const
 {
-    const int i = (int)haplotype;
-    
-    if (i < 0 || i >= this->size_)
-    {
-        throw std::out_of_range("No allele defined for haplotype '" + std::to_string(i) + "'");
-    }
-    
-    return this->list_[i];
+	return (i < 0 || i >= this->size_);
 }
 
 bool AlleleList::contains_snp() const

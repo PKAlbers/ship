@@ -15,8 +15,6 @@
 #include <iostream>
 #include <sstream>
 
-#include "types.h"
-
 
 //******************************************************************************
 // Allele container
@@ -103,7 +101,9 @@ public:
 	
 	// return allele
 	const Allele & operator [] (const int) const;
-    const Allele & operator [] (const Haplotype &) const;
+	
+	// check if corresponding allele is present
+	bool operator () (const int) const;
 	
     // print to stream
     void print(std::ostream &, const char = '\0') const;

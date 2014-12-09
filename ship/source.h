@@ -15,7 +15,6 @@
 #include <algorithm>
 #include <numeric>
 
-#include "types.h"
 #include "marker.h"
 #include "sample.h"
 
