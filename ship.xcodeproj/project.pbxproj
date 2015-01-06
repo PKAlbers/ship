@@ -72,7 +72,7 @@
 		07EA59361A2363160024875A /* print.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = print.h; sourceTree = "<group>"; };
 		07FD277C1A5BF760004A49CC /* command.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = command.cpp; sourceTree = "<group>"; };
 		07FD277D1A5BF760004A49CC /* command.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = command.h; sourceTree = "<group>"; };
-		07FD277F1A5BF961004A49CC /* parse.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = parse.hpp; path = ../parse.hpp; sourceTree = "<group>"; };
+		07FD277F1A5BF961004A49CC /* parse.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = parse.hpp; sourceTree = "<group>"; };
 		07FD27801A5C0B26004A49CC /* types.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = types.hpp; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -91,7 +91,6 @@
 		0747DC671A0CE3C900D3D60D = {
 			isa = PBXGroup;
 			children = (
-				07FD27801A5C0B26004A49CC /* types.hpp */,
 				0747DC7A1A0CE3ED00D3D60D /* libz.1.2.5.dylib */,
 				0747DC721A0CE3C900D3D60D /* ship */,
 				0747DC711A0CE3C900D3D60D /* Products */,
@@ -112,6 +111,7 @@
 				0747DC731A0CE3C900D3D60D /* main.cpp */,
 				07FD277C1A5BF760004A49CC /* command.cpp */,
 				07FD277D1A5BF760004A49CC /* command.h */,
+				07FD27801A5C0B26004A49CC /* types.hpp */,
 				07EA59231A1A00910024875A /* timer.cpp */,
 				07EA59241A1A00910024875A /* timer.h */,
 				0747DC8E1A0CF8A600D3D60D /* census.cpp */,
