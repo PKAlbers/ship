@@ -20,6 +20,12 @@
 
 
 //******************************************************************************
+// Current time
+//******************************************************************************
+std::string timestamp(const bool = false);
+
+
+//******************************************************************************
 // Elapsed time clocks
 //******************************************************************************
 class Runtime
@@ -34,10 +40,10 @@ public:
 	unsigned long long raw() const;
 	
 	// calculate elapsed CPU seconds
-	unsigned long comp() const;
+	size_t comp() const;
 	
 	// calculate elapsed real seconds
-	unsigned long real() const;
+	size_t real() const;
 	
 	// convert elapsed CPU time to string
 	std::string str_comp() const;
@@ -68,12 +74,12 @@ class ProgressBar
 {
 private:
 	
-	const bool dynamic; // flag that output should be dynamic or static when updating
-	const unsigned long target; // target number of updates
+	const bool   log; // flag that output log static progress bar
+	const size_t target;  // target number of updates
 	const double interval_dynamic; // cout interval
-	const double interval_static; // clog interval
+	const double interval_static;  // clog interval
 	
-	unsigned long i; // count of updates
+	size_t i; // count of updates
 	double t_dynamic, t_static; // next threshold from calculated rate
 	
 	static const unsigned int size; // width of bar
@@ -81,18 +87,16 @@ private:
 	static const char fill; // bar fill symbol
 	static const char rest; // bar rest symbol
 	
-	std::ostream * stream_;
-	
 public:
 	
 	// update progress
-	void update(const unsigned long = 1);
+	void update(const size_t = 1);
 	
 	// finish progress
 	void finish() const;
 	
 	// construct
-	ProgressBar(const unsigned long, const bool = true, std::ostream * = &std::cout);
+	ProgressBar(const size_t, const bool = true);
 	
 	// do not copy
 	ProgressBar(const ProgressBar &) = delete;
@@ -107,30 +111,30 @@ class ProgressMsg
 {
 private:
 	
-	const clock_t       time; // start time
-	const std::string   unit; // unit of update
-	const unsigned long rate; // update rate, every i'th update
-	char *              line; // line for message printing
+	const clock_t     time; // start time
+	const std::string unit; // unit of update
+	const size_t      rate; // update rate, every i'th update
+	char *            line; // line for message printing
 	
-	int           l; // longest length of line
-	unsigned long i; // count updates
-	double        t; // last time checkpoint
+	int    l; // longest length of line
+	size_t i; // count updates
+	double t; // last time checkpoint
 	
 	static const double interval; // print interval
-	static const int    size;   // max size of line message
+	static const int    size; // max size of line message
 	
 	std::ostream * stream_;
 	
 public:
 	
 	// update progress
-	void update(const unsigned long = 1);
+	void update(const size_t = 1);
 	
 	// finish progress
-	void finish() const;
+	void finish(const size_t = 0) const;
 	
 	// construct/destruct
-	ProgressMsg(const std::string, const unsigned long = 10, std::ostream * = &std::cout);
+	ProgressMsg(const std::string, const size_t = 11, std::ostream * = &std::cout);
 	~ProgressMsg();
 	
 	// do not copy

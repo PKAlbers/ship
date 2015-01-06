@@ -1,32 +1,109 @@
 //
-//  input.cpp
+//  line.cpp
 //  ship
 //
-//  Created by Patrick Albers on 21.11.2014.
+//  Created by Patrick Albers on 13.12.2014.
 //  Copyright (c) 2014 Patrick K. Albers. All rights reserved.
 //
 
 #include "input.h"
+#include "parse.hpp"
 
 
 //******************************************************************************
 // Input handling
 //******************************************************************************
 
+const std::vector<std::string> vcf_required_columns = {
+	"#CHROM",
+	"POS",
+	"ID",
+	"REF",
+	"ALT",
+	"QUAL",
+	"FILTER",
+	"INFO",
+	"FORMAT"
+}; // expected column headers in VCF file
+
+
 //
-// Filter input before putting in source
+// Filter line before sourcing
 //
 
 FilterInput::FilterMarkerInfo::FilterMarkerInfo()
-: remove_if_contains_indel(false)
-, remove_if_contains_other(true)
-, remove_if_multiallelic(false)
+: any(false)
+, remove_if_contains_snp_(false)
+, remove_if_contains_indel_(false)
+, remove_if_contains_other_(false)
+, remove_if_biallelic_(false)
+, remove_if_multiallelic_(false)
+, remove_pos_(false)
 {}
 
+void FilterInput::FilterMarkerInfo::remove_if_contains_snp()
+{
+	std::clog << "Filter applied: exclude markers containing SNPs" << std::endl;
+	this->any = true;
+	this->remove_if_contains_snp_ = true;
+}
+
+void FilterInput::FilterMarkerInfo::remove_if_contains_indel()
+{
+	std::clog << "Filter applied: exclude markers containing INDELs" << std::endl;
+	this->any = true;
+	this->remove_if_contains_indel_ = true;
+}
+
+void FilterInput::FilterMarkerInfo::remove_if_contains_other()
+{
+	std::clog << "Filter applied: exclude markers containing missing/undefined allele definitions" << std::endl;
+	this->any = true;
+	this->remove_if_contains_other_ = true;
+}
+
+void FilterInput::FilterMarkerInfo::remove_if_biallelic()
+{
+	std::clog << "Filter applied: exclude bi-alleleic markers" << std::endl;
+	this->any = true;
+	this->remove_if_biallelic_ = true;
+}
+
+void FilterInput::FilterMarkerInfo::remove_if_multiallelic()
+{
+	std::clog << "Filter applied: exclude multi-alleleic markers" << std::endl;
+	this->any = true;
+	this->remove_if_multiallelic_ = true;
+}
+
+void FilterInput::FilterMarkerInfo::remove_pos(const std::string & filename)
+{
+	std::ifstream line(filename);
+	size_t pos;
+	
+	while (line >> pos)
+	{
+		this->remove_pos_set.insert(pos);
+	}
+	
+	std::clog << "Filter applied: exclude markers at " << this->remove_pos_set.size() << " positions" << std::endl;
+	this->any = true;
+	this->remove_pos_ = true;
+}
+
+
 FilterInput::FilterMarkerData::FilterMarkerData()
-: remove_if_unphased(false)
-, remove_if_unknown(true)
+: any(false)
+, remove_if_contains_unknown_(false)
 {}
+
+void FilterInput::FilterMarkerData::remove_if_contains_unknown()
+{
+	std::clog << "Filter applied: exclude markers containing missing/undefined samples" << std::endl;
+	this->any = true;
+	this->remove_if_contains_unknown_ = true;
+}
+
 
 FilterInput::FilterMarkerStat::FilterMarkerStat()
 : any(false)
@@ -36,793 +113,588 @@ FilterInput::FilterMarkerStat::FilterMarkerStat()
 , remove_gen_above_(false)
 {}
 
-bool FilterInput::apply(const MarkerInfo & info, const unsigned long i) const
+void FilterInput::FilterMarkerStat::remove_hap_below(const std::string & str, const size_t size)
 {
-	if (this->markerinfo.remove_if_contains_indel && info.contains_indel())
-	{
-		std::clog << "Marker filtered (contains indels): line " << i << std::endl;
-		return false;
-	}
-	if (this->markerinfo.remove_if_contains_other && info.contains_other())
-	{
-		std::clog << "Marker filtered (contains undefined alleles): line " << i << std::endl;
-		return false;
-	}
-	if (this->markerinfo.remove_if_multiallelic && info.n_alleles() > 2)
-	{
-		std::clog << "Marker filtered (is multi-allelic): line " << i << std::endl;
-		return false;
-	}
-	return true;
+	this->remove_hap_below_cutoff.parse(str);
+	this->remove_hap_below_cutoff.scale(size);
+	
+	std::clog << "Filter applied: exclude markers below or equal to allele count/frequency of " << str << std::endl;
+	this->any = true;
+	this->remove_hap_below_ = true;
 }
 
-bool FilterInput::apply(const MarkerData & data, const unsigned long i) const
+void FilterInput::FilterMarkerStat::remove_hap_above(const std::string & str, const size_t size)
 {
-	if (this->markerdata.remove_if_unphased && data.contains_unphased())
-	{
-		std::clog << "Marker filtered (contains unphased data): line " << i << std::endl;
-		return false;
-	}
-	if (this->markerdata.remove_if_unknown  && data.contains_unknown())
-	{
-		std::clog << "Marker filtered (contains missing genotypes): line " << i << std::endl;
-		return false;
-	}
-	return true;
+	this->remove_hap_above_cutoff.parse(str);
+	this->remove_hap_above_cutoff.scale(size);
+	
+	std::clog << "Filter applied: exclude markers above or equal to allele count/frequency of " << str << std::endl;
+	this->any = true;
+	this->remove_hap_above_ = true;
 }
 
-bool FilterInput::apply(const MarkerStat & stat, const unsigned long i) const
+void FilterInput::FilterMarkerStat::remove_gen_below(const std::string & str, const size_t size)
 {
-	if (this->markerstat.any)
-	{
-		if (this->markerstat.remove_hap_below_)
-		{
-			for (std::map<Haplotype, Census>::const_iterator it = stat.haplostat.cbegin(), end = stat.haplostat.cend(); it != end; ++it)
-			{
-				if (it->second <= this->markerstat.remove_hap_below)
-				{
-					std::clog << "Marker filtered (allele count/frequency equal or below specified value): line " << i << std::endl;
-					return false;
-				}
-			}
-		}
-		if (this->markerstat.remove_hap_above_)
-		{
-			for (std::map<Haplotype, Census>::const_iterator it = stat.haplostat.cbegin(), end = stat.haplostat.cend(); it != end; ++it)
-			{
-				if (it->second >= this->markerstat.remove_hap_above)
-				{
-					std::clog << "Marker filtered (allele count/frequency equal or above specified value): line " << i << std::endl;
-					return false;
-				}
-			}
-		}
-		if (this->markerstat.remove_gen_below_)
-		{
-			for (std::map<Genotype, Census>::const_iterator it = stat.genostat.cbegin(), end = stat.genostat.cend(); it != end; ++it)
-			{
-				if (it->second <= this->markerstat.remove_gen_below)
-				{
-					std::clog << "Marker filtered (genotype count/frequency equal or below specified value): line " << i << std::endl;
-					return false;
-				}
-			}
-		}
-		if (this->markerstat.remove_gen_above_)
-		{
-			for (std::map<Genotype, Census>::const_iterator it = stat.genostat.cbegin(), end = stat.genostat.cend(); it != end; ++it)
-			{
-				if (it->second >= this->markerstat.remove_gen_above)
-				{
-					std::clog << "Marker filtered (genotype count/frequency equal or above specified value): line " << i << std::endl;
-					return false;
-				}
-			}
-		}
-	}
-	return true;
+	this->remove_gen_below_cutoff.parse(str);
+	this->remove_gen_below_cutoff.scale(size);
+	
+	std::clog << "Filter applied: exclude markers below or equal to genotype count/frequency of " << str << std::endl;
+	this->any = true;
+	this->remove_gen_below_ = true;
+}
+
+void FilterInput::FilterMarkerStat::remove_gen_above(const std::string & str, const size_t size)
+{
+	this->remove_gen_above_cutoff.parse(str);
+	this->remove_gen_above_cutoff.scale(size);
+	
+	std::clog << "Filter applied: exclude markers above or equal to genotype count/frequency of " << str << std::endl;
+	this->any = true;
+	this->remove_gen_above_ = true;
 }
 
 
+FilterInput::FilterMarkerGmap::FilterMarkerGmap()
+: any(false)
+, remove_if_source_interpolated_(false)
+, remove_if_source_extrapolated_(false)
+, remove_if_source_unknown_(false)
+{}
 
-//
-// Scan input file format
-//
-ScanInput::ScanInput(const std::string & filename, const InputFormat format)
-: ReadStream(filename)
-, format(format)
-, header_rows(0)
-, marker_cols(0)
-, sample_cols(0)
+void FilterInput::FilterMarkerGmap::remove_if_source_interpolated()
 {
-	if (this->format != InputFormat::UNKNOWN)
-	{
-		if (! this->read())
-		{
-			throw std::runtime_error(this->error("Cannot read file", true));
-		}
-		
-		// check user-specified format
-		switch (this->format)
-		{
-			case InputFormat::VCF:
-				
-				if (! this->scan_format_vcf())
-				{
-					throw std::invalid_argument(this->error("Invalid VCF file format", true));
-				}
-				break;
-				
-			case InputFormat::HAP:
-				
-				if (! this->scan_format_hap())
-				{
-					throw std::invalid_argument(this->error("Invalid HAP file format", true));
-				}
-				break;
-				
-			case InputFormat::GEN:
-				
-				if (! this->scan_format_gen())
-				{
-					throw std::invalid_argument(this->error("Invalid GEN file format", true));
-				}
-				break;
-				
-			case InputFormat::UNKNOWN:
-				throw std::invalid_argument(this->error("Unknown file format", true));
-				break;
-		}
-
-		this->close();
-		return;
-	}
-	
-	clock_t time = clock();
-	
-	while (((clock() - time) / CLOCKS_PER_SEC) < 5) // read lines up to 5 sec, if no format was determined
-	{
-		// read next line
-		if (! this->read())
-		{
-			if (this->count == 0) // if first line cannot be read
-				throw std::runtime_error(this->error("Cannot read file", true));
-			
-			this->close();
-			return;
-		}
-		
-		// check VCF
-		if (this->scan_format_vcf())
-		{
-			this->format = InputFormat::VCF;
-			this->close();
-			return;
-		}
-		
-		// check HAP
-		bool is_hap = this->scan_format_hap();
-		
-		// check GEN
-		bool is_gen = this->scan_format_gen();
-		
-		// determine HAP/GEN format, because they can appear similar
-		if (is_hap && !is_gen)
-		{
-			this->format = InputFormat::HAP;
-			this->close();
-			return;
-		}
-		else if (is_gen && !is_hap)
-		{
-			this->format = InputFormat::GEN;
-			this->close();
-			return;
-		}
-	}
-	
-	this->close();
+	std::clog << "Filter applied: exclude markers if interpolated from genetic map" << std::endl;
+	this->any = true;
+	this->remove_if_source_interpolated_ = true;
 }
 
-bool ScanInput::scan_format_vcf()
+void FilterInput::FilterMarkerGmap::remove_if_source_extrapolated()
 {
-	// check first line, which determines VCF format
-	if (this->count != 1)
-	{
-		return false;
-	}
-	
-	// check first VCF header line
-	if (std::string(this->line, vcf_top_header.size()) != vcf_top_header)
-	{
-		return false;
-	}
-	
-	// continue reading header
-	std::string last; // previous line
-
-	do
-	{
-		last = this->line;
-		this->header_rows += 1; // count header lines
-	}
-	while (this->read() && this->line[0] == '#');
-	
-	// check last header line for required column names
-	std::vector<std::string> col;
-	
-	// parse sample IDs in header
-	if (!strtk::parse(last, " \t", col))
-		throw std::runtime_error(this->error("Unable to parse header information", true));
-	
-	for (int i = 0; i < vcf_col_number; ++i)
-	{
-		if (col[i] != vcf_col_header[i])
-		{
-			throw std::invalid_argument(this->error("Invalid VCF file format\n"
-													"Required column '" + vcf_col_header[i] + "' cannot be found in header", true));
-		}
-	}
-	
-	// marker/sample column counts
-	this->marker_cols = vcf_col_number;
-	this->sample_cols = col.size() - vcf_col_number;
-	
-	return true;
+	std::clog << "Filter applied: exclude markers if extrapolated from genetic map" << std::endl;
+	this->any = true;
+	this->remove_if_source_extrapolated_ = true;
 }
 
-bool ScanInput::scan_format_hap()
+void FilterInput::FilterMarkerGmap::remove_if_source_unknown()
 {
-	std::vector<std::string> tokens;
-
-	// parse line
-	if (! strtk::parse(this->line, " ", tokens))
-	{
-		std::cout << this->line << std::endl;
-		throw std::runtime_error(this->error("Cannot parse input file, at line: ", true, true));
-	}
-
-	// init marker/sample column counts
-	this->marker_cols = tokens.size();
-	this->sample_cols = 0;
-
-	// reverse walkabout tokens
-	for (const std::string & token : tokens)
-	{
-		if (token == "0" || token == "1") // either 0 or 1
-		{
-			this->marker_cols -= 1;
-			this->sample_cols += 1;
-			continue;
-		}
-		break;
-	}
-
-	// check sample column count
-	if (sample_cols % hap_set_format != 0)
-		return false;
-	
-	return true;
-}
-
-bool ScanInput::scan_format_gen()
-{
-	std::vector<std::string> tokens;
-	std::vector<double> D;
-	
-	// parse line
-	if (!strtk::parse(this->line, " ", tokens))
-	{
-		throw std::runtime_error(this->error("Cannot parse input file, at line: ", true, true));
-	}
-	
-	// init marker/cample column counts
-	this->marker_cols = tokens.size();
-	this->sample_cols = 0;
-	
-	// reverse walkabout tokens
-	for (const std::string & token : tokens)
-	{
-		double d = std::stod(token);
-		
-		if (d > 0.0 && d < 1.0) // float between 0 and 1
-		{
-			this->marker_cols -= 1;
-			this->sample_cols += 1;
-			
-			D.push_back(d); // collect values
-			
-			continue;
-		}
-		break;
-	}
-	
-	// check sample column count
-	if (sample_cols % gen_set_format != 0)
-		return false;
-	
-	// check genotype per individual
-	for (unsigned long i = 0, k; i < sample_cols; )
-	{
-		double sum = 0;
-		for (k = 0; k < gen_set_format; ++k, ++i)
-			sum += D[i];
-		
-		if (sum < 0.95 || sum > 1.05) // tripple must sum to ~1
-		{
-			return false;
-		}
-	}
-	
-	return true;
+	std::clog << "Filter applied: exclude markers if not computed from genetic map" << std::endl;
+	this->any = true;
+	this->remove_if_source_unknown_ = true;
 }
 
 
-//
-// Load input files into source
-//
-LoadInput::LoadInput(const ScanInput & scan, const FilterInput & _filter)
-: input(scan.name, scan.format, scan.marker_cols, scan.header_rows)
-, filter(_filter)
-, sample_(false)
-, legend_(false)
-, genmap_(false)
-{
-	switch (scan.format)
-	{
-		case InputFormat::VCF: this->size = scan.sample_cols; break;
-		case InputFormat::HAP: this->size = scan.sample_cols / hap_set_format; break;
-		case InputFormat::GEN: this->size = scan.sample_cols / gen_set_format; break;
-		case InputFormat::UNKNOWN:
-		default:
-			throw std::invalid_argument(this->input.error("Input file is of unknown format", true));
-	}
-}
+FilterInput::FilterSampleInfo::FilterSampleInfo()
+: any(false)
+, remove_key_(false)
+{}
 
-//LoadInput::~LoadInput()
-//{}
-
-std::vector<SampleInfo> LoadInput::get_sample_vcf() const
+void FilterInput::FilterSampleInfo::remove_key(const std::string & filename)
 {
-	std::vector<SampleInfo> info(this->size); // init with sample size
-	
-	std::vector<std::string> keys;
-	std::set<std::string>    uniq;
-	
-	keys.reserve(this->size); // reserve expected sample size
-	
-	if (this->input.header.size() == 0) throw std::exception(); // should never happen
-	
-	// tokenise header
-	std::istringstream iss(this->input.header.back());
+	std::ifstream line(filename);
 	std::string key;
 	
-	while (iss >> key)
+	while (line >> key)
 	{
-		if (uniq.count(key) != 0)
+		this->remove_key_set.insert(key);
+	}
+	
+	std::clog << "Filter applied: exclude " << this->remove_key_set.size() << " sample IDs" << std::endl;
+	this->any = true;
+	this->remove_key_ = true;
+}
+
+
+bool FilterInput::apply(const MarkerInfo & info)
+{
+	if (! this->markerinfo.any)
+		return true;
+	
+	if (this->markerinfo.remove_if_contains_snp_ &&
+		info.allele.contains_snp())
+	{
+		this->comment = "Marker excluded: contains SNPs";
+		return false;
+	}
+	
+	if (this->markerinfo.remove_if_contains_indel_ &&
+		info.allele.contains_indel())
+	{
+		this->comment = "Marker excluded: contains INDELs";
+		return false;
+	}
+	
+	if (this->markerinfo.remove_if_contains_other_ &&
+		info.allele.contains_other())
+	{
+		this->comment = "Marker excluded: contains invalid allele definitions";
+		return false;
+	}
+	
+	if (this->markerinfo.remove_if_biallelic_ &&
+		info.allele.size() == 2)
+	{
+		this->comment = "Marker excluded: is bi-allelic";
+		return false;
+	}
+	
+	if (this->markerinfo.remove_if_multiallelic_ &&
+		info.allele.size() > 2)
+	{
+		this->comment = "Marker excluded: is multi-allelic";
+		return false;
+	}
+	
+	if (this->markerinfo.remove_pos_ &&
+		this->markerinfo.remove_pos_set.count(info.pos) != 0)
+	{
+		this->comment = "Marker excluded: at specified position '" + std::to_string(info.pos) + "'";
+		return false;
+	}
+	
+	return true;
+}
+
+bool FilterInput::apply(const MarkerData & data)
+{
+	if (! this->markerdata.any)
+		return true;
+	
+	if (this->markerdata.remove_if_contains_unknown_ &&
+		data.contains_unknown())
+	{
+		this->comment = "Marker excluded: contains invalid sample alleles";
+		return false;
+	}
+	
+	return true;
+}
+
+bool FilterInput::apply(const MarkerStat & stat)
+{
+	if (! this->markerstat.any)
+		return true;
+	
+	int i;
+	const int h_size = stat.haplotype.size();
+	const int g_size = stat.genotype.size();
+	
+	if (this->markerstat.remove_hap_below_)
+	{
+		for (i = 0; i < h_size; ++i)
 		{
-			throw std::invalid_argument(this->input.error("Duplicate sample ID '" + key + "' detected in VCF header", true));
+			if (stat.haplotype.census(i) <= this->markerstat.remove_hap_below_cutoff)
+			{
+				this->comment = "Marker excluded: allele count/frequency below threshold";
+				return false;
+			}
+		}
+	}
+	
+	if (this->markerstat.remove_hap_above_)
+	{
+		for (i = 0; i < h_size; ++i)
+		{
+			if (stat.haplotype.census(i) >= this->markerstat.remove_hap_above_cutoff)
+			{
+				this->comment = "Marker excluded: allele count/frequency above threshold";
+				return false;
+			}
+		}
+	}
+	
+	if (this->markerstat.remove_gen_below_)
+	{
+		for (i = 0; i < g_size; ++i)
+		{
+			if (stat.genotype.census(i) <= this->markerstat.remove_gen_below_cutoff)
+			{
+				this->comment = "Marker excluded: genotype count/frequency below threshold";
+				return false;
+			}
+		}
+	}
+	
+	if (this->markerstat.remove_gen_above_)
+	{
+		for (i = 0; i < g_size; ++i)
+		{
+			if (stat.genotype.census(i) >= this->markerstat.remove_gen_above_cutoff)
+			{
+				this->comment = "Marker excluded: genotype count/frequency above threshold";
+				return false;
+			}
+		}
+	}
+	
+	return true;
+}
+
+bool FilterInput::apply(const MarkerGmap & gmap)
+{
+	if (! this->markergmap.any)
+		return true;
+	
+	if (this->markergmap.remove_if_source_interpolated_ &&
+		gmap.source == MarkerGmap::interpolated)
+	{
+		this->comment = "Marker excluded: was interpolated from genetic map";
+		return false;
+	}
+	
+	if (this->markergmap.remove_if_source_extrapolated_ &&
+		gmap.source == MarkerGmap::extrapolated)
+	{
+		this->comment = "Marker excluded: was extrapolated from genetic map";
+		return false;
+	}
+	
+	if (this->markergmap.remove_if_source_unknown_&&
+		gmap.source == MarkerGmap::unknown)
+	{
+		this->comment = "Marker excluded: unable to approxmiate from genetic map";
+		return false;
+	}
+	
+	return true;
+}
+
+bool FilterInput::apply(const SampleInfo & info)
+{
+	if (! this->sampleinfo.any)
+		return true;
+	
+	if (this->sampleinfo.remove_key_ &&
+		this->sampleinfo.remove_key_set.count(info.key) != 0)
+	{
+		this->comment = "Sample excluded: identifier '" + info.key + "' excluded";
+		return false;
+	}
+	
+	return true;
+}
+
+
+//
+// Load line and other files
+//
+
+Input_VCF::Input_VCF(const std::string & filename)
+: line(filename)
+, size(0)
+, sample_(false)
+, genmap_(false)
+{
+	bool flag = false;
+	std::string last;
+	const size_t vcf_n = vcf_required_columns.size();
+	
+	// read first line
+	if (!this->line.next())
+	{
+		throw std::invalid_argument(this->error("Cannot read from VCF file"));
+	}
+	
+	// check format
+	if (std::string(this->line, 16) != "##fileformat=VCF")
+	{
+		throw std::invalid_argument(this->error("Input file not in Variant Call Format"));
+	}
+	
+	// read last header line
+	while (this->line.next())
+	{
+		if (this->line[0] != '#') // until line is no header
+		{
+			flag = true;
+			break;
 		}
 		
-		keys.push_back(key);
-		uniq.insert(key);
+		last = this->line;
 	}
-	uniq.clear();
-
-	// remove marker columns
-	keys.erase(keys.begin(), keys.begin() + vcf_col_number);
 	
-	if (this->size != keys.size()) throw std::exception(); // should never happen
-	
-	// move IDs in formated output
-	for (unsigned long i = 0; i < this->size; ++i)
+	if (!flag)
 	{
-		info[i].key = std::move(keys[i]); // move
+		throw std::invalid_argument(this->error("Input file does not contain data"));
 	}
-	keys.clear();
 	
-	return info;
-}
-
-std::vector<SampleInfo> LoadInput::get_sample_hap() const
-{
-	return this->make_sample(); // generate
-}
-
-std::vector<SampleInfo> LoadInput::get_sample_gen() const
-{
-	return this->make_sample(); // generate
-}
-
-std::vector<SampleInfo> LoadInput::make_sample() const
-{
-	std::vector<SampleInfo> info(this->size); // init with sample size
 	
-	const unsigned long len0 = std::to_string(this->size).size();
+	StreamSplit token(last);
 	
-	for (unsigned long i = 0; i < this->size; ++i)
+	while (token.next())
 	{
-		const std::string str = std::to_string(i);
-		const unsigned long len1 = str.size();
+		if (token.count() <= vcf_n)
+		{
+			// check required columns
+			if (token.str() != vcf_required_columns[ token.count() - 1 ])
+			{
+				throw std::invalid_argument(this->error("Invalid line file format\n"
+														"Column '" + vcf_required_columns[ token.count() - 1 ] + "' "
+														"is missing"));
+			}
+			
+			continue;
+		}
 		
-		info[i].key = "SampleID_" + std::string(len0 - len1, '0') + str;
+		// store sample information
+		SampleInfo info;
+		info.key = token;
+		this->_sample.push_back(info);
+		++this->size;
 	}
-	
-	return info;
 }
 
-void LoadInput::sample(const std::string & filename)
+void Input_VCF::log(const std::string & comment)
 {
-	std::cout << "Loading sample file:" << std::endl;
-	std::clog << "Loading sample file:" << std::endl;
+	std::clog << comment << " (line " << this->line.count() << ")" << std::endl;
+}
+
+std::string Input_VCF::error(const std::string & comment)
+{
+	std::ostringstream err;
+	err << comment << "\n";
+	err << "Line: " << this->line.count() << "\n";
+	err << "File: " << this->line.source();
+	return err.str();
+}
+
+void Input_VCF::sample(const std::string & filename)
+{
+	size_t n = 0;
 	
-	// open sample file
-	ReadSample stream(filename);
-	this->sample_ = true;
+	StreamLine line(filename);
 	
-	Runtime runtime;
-	ProgressMsg progress("samples");
+	// skip header
+	if (! line.next())
+	{
+		throw std::invalid_argument("Cannot read from sample file");
+	}
 	
-	// expect sample size
-	this->_sample.cache.reserve(this->size);
+	std::cout << "Loading sample file" << std::endl;
+	std::clog << "Loading sample file: " << line.source() << std::endl;
+	ProgressMsg progress("lines");
+	Runtime timer;
 	
-	std::set<std::string> unique;
-	unsigned long count = 0;
-	
-	// load sample information from file
-	while (stream.read())
+	// walkabout
+	while (line.next())
 	{
 		SampleInfo info;
 		
-		if (! stream.parse(info))
-		{
-			throw std::invalid_argument(stream.error("Cannot parse sample information", true, true, true));
-		}
-		
-		// check duplicates
-		if (unique.count(info.key))
-		{
-			throw std::invalid_argument(stream.error("Duplicate sample ID detected", true, true, true));
-		}
-		
-		unique.insert(info.key);
-		this->_sample.cache.push_back(std::move(info)); // move
-		count += 1;
-		
 		progress.update();
-	}
-	
-	progress.finish();
-	std::clog << "Samples read: " << count << std::endl;
-	std::clog << runtime.str() << std::endl;
-	
-	// check expected sample size
-	if (this->size != count)
-	{
-		throw std::invalid_argument(stream.error("Unexpected sample size\n"
-												 "Samples expected: " + std::to_string(this->size) + "\n"
-												 "Samples detected: " + std::to_string(count), true));
-	}
-	
-	// sample IDs from VCF header
-	if (this->input.format == InputFormat::VCF)
-	{
-		std::vector<SampleInfo> info = this->get_sample_vcf();
 		
-		// check sample IDs in both files
-		for (unsigned long i = 0; i < this->size; ++i)
+		if(parse_sample_line(line, info))
 		{
-			if (info[i].key != this->_sample.cache[i].key)
+			if (info.key != _sample[n].key)
 			{
-				throw std::invalid_argument("Sample IDs in VCF file do not correspond to IDs in sample file\n"
-											"# " + std::to_string(i) +  " expected from VCF file:  " + info[i].key + "\n"
-											"# " + std::to_string(i) +  " detected in sample file: " + this->_sample.cache[i].key);
+				throw std::invalid_argument("Sample IDs do not match\n"
+											"In line file:  '" + _sample[n].key + "'\n"
+											"In sample file: '" + info.key + "' (line " + std::to_string(line.count()) +  ")");
 			}
+			
+			// overwrite
+			_sample[n] = std::move(info);
+			++n;
+			continue;
 		}
+		
+		throw std::invalid_argument("Invalid sample file format\n"
+									"Cannot parse sample information on line " + std::to_string(line.count()));
 	}
+	
+	if (n != this->size)
+	{
+		throw std::length_error("Sample file contains unexpected number of samples\n"
+								"Expected from line file: " + std::to_string(this->size) + "\n"
+								"Detected in sample file:  " + std::to_string(n));
+	}
+	
+	progress.finish(this->line.count());
+	std::clog << "Done! " << timer.str() << std::endl << std::endl;
+	
+	this->sample_ = true;
 }
 
-void LoadInput::legend(const std::string & filename)
+void Input_VCF::genmap(const std::string & filename)
 {
-	std::cout << "Loading legend file:" << std::endl;
-	std::clog << "Loading legend file:" << std::endl;
+	size_t cols;
 	
-	// open sample file
-	ReadLegend stream(filename);
-	this->legend_ = true;
+	StreamLine line(filename);
+	StreamSplit token(line);
 	
-	Runtime runtime;
-	ProgressMsg progress("markers");
+	// count columns
+	while (line.next()) {}
+	cols = line.count();
 	
-	std::set<unsigned long> unique;
-	unsigned long count = 0;
-	
-	// load marker information from file
-	while (stream.read())
+	// skip header
+	if (! line.next())
 	{
-		MarkerInfo info;
-		bool flag = false; // flag that marker is valid
-		
-		if (stream.parse(info))
-		{
-			// check duplicate
-			if (unique.count(info.pos) == 0)
-			{
-				flag = this->filter.apply(info, this->input.count); // apply filter
-				unique.insert(info.pos);
-			}
-			else
-			{
-				// log duplicate
-				std::clog << "Duplicate marker at position " + std::to_string(info.pos) + " ignored: line " + std::to_string(stream.count) << std::endl;
-			}
-		}
-		
-		// include all marker lines, even if parsing failed
-		this->_legend.cache.push_back(std::move(info)); // move
-		this->_legend.valid.push_back(static_cast<char>(flag)); // flag validity
-		count += 1;
-		
-		progress.update();
+		throw std::invalid_argument("Cannot read from genetic map");
 	}
 	
-	progress.finish();
-	std::clog << "Markers read: " << count << std::endl;
-	std::clog << runtime.str() << std::endl;
+	std::cout << "Loading genetic map" << std::endl;
+	std::clog << "Loading genetic map: " << line.source() << std::endl;
+	ProgressMsg progress("lines");
+	Runtime timer;
 	
-	if (count == 0)
-	{
-		throw std::length_error(stream.error("Legend file is empty", true));
-	}
-}
-
-void LoadInput::genmap(const std::string & filename)
-{
-	std::cout << "Loading genetic map:" << std::endl;
-	std::clog << "Loading genetic map:" << std::endl;
-	
-	// open genetic map
-	ReadGenmap stream(filename);
-	this->genmap_ = true;
-	
-	Runtime runtime;
-	ProgressMsg progress("mapped markers");
-	
-	// load marker information from file
-	while (stream.read())
+	// walkabout
+	while (line.next())
 	{
 		GenmapInfo info;
 		
-		if (stream.parse(info))
+		progress.update();
+		
+		switch (cols)
 		{
-			try
+			case 3:
 			{
-				this->_genmap.cache.insert(std::move(info)); // move
+				if (parse_genmap_3col(line, info))
+				{
+					try
+					{
+						this->_genmap.insert(info);
+					}
+					catch (const std::exception & x)
+					{
+						throw std::invalid_argument(std::string("Error while building genetic map\n") + x.what());
+					}
+				}
+				else
+				{
+					throw std::invalid_argument("Invalid genetic map format\n"
+												"Cannot parse information on line " + std::to_string(line.count()));
+				}
+				break;
 			}
-			catch (std::invalid_argument & ia)
+			case 4:
 			{
-				throw std::invalid_argument(stream.error(ia.what(), true, true, true));
+				if (parse_genmap_4col(line, info))
+				{
+					try
+					{
+						this->_genmap.insert(info);
+					}
+					catch (const std::exception & x)
+					{
+						throw std::invalid_argument(std::string("Error while building genetic map\n") + x.what());
+					}
+				}
+				else
+				{
+					throw std::invalid_argument("Invalid genetic map format\n"
+												"Cannot parse information on line " + std::to_string(line.count()));
+				}
+				break;
+			}
+			default:
+			{
+				throw std::invalid_argument("Cannot handle genetic map files with " + std::to_string(cols) + " columns");
+				break;
 			}
 		}
-		
-		progress.update();
 	}
 	
-	this->_genmap.cache.finish();
+	progress.finish(this->line.count());
+	std::clog << "Done! " << timer.str() << std::endl << std::endl;
 	
-	progress.finish();
-	std::clog << "Mapped markers read: " << this->_genmap.cache.size() << std::endl;
-	std::clog << runtime.str() << std::endl;
-	
-	if (this->_genmap.cache.size() == 0)
-	{
-		throw std::length_error(stream.error("No mapped markers found", true));
-	}
+	this->genmap_ = true;
 }
 
-void LoadInput::load(Source & source)
+void Input_VCF::run(Source & source)
 {
-	// check required sample file
-	if (this->input.require_sample && !this->sample_)
-		throw std::runtime_error("Sample file required");
+	// source samples
+	std::vector<size_t> skip; // skip sample index
+	size_t n_skip; // count skipped samples
+	bool skip_ = false; // flag that samples were skipped
 	
-	// check required legend file
-	if (this->input.require_legend && !this->legend_)
-		throw std::runtime_error("Legend file required");
-	
-	// check required genmap file
-	if (this->input.require_genmap && !this->genmap_)
-		throw std::runtime_error("Genetic map required");
-	
-	// handle missing sample file
-	if (!this->sample_)
+	for (size_t i = 0; i < this->size; ++i)
 	{
-		// get sample IDs from input file (or generate)
-		switch (this->input.format)
+		// filter sample
+		if (this->filter.apply(this->_sample[i]))
 		{
-			case InputFormat::VCF: this->_sample.cache = this->get_sample_vcf(); break;
-			case InputFormat::HAP: this->_sample.cache = this->get_sample_hap(); break;
-			case InputFormat::GEN: this->_sample.cache = this->get_sample_gen(); break;
-			case InputFormat::UNKNOWN:
-			default:
-				this->_sample.cache = this->make_sample(); break;
+			Sample sample;
+			sample.info = std::move(this->_sample[i]);
+			source.append(std::move(sample));
+			continue;
 		}
-	}
-	
-	// source sample
-	for (SampleInfo & info : this->_sample.cache)
-	{
-		Sample S;
-		S.info = std::move(info); // move
 		
-		source.append(std::move(S)); //move
-	}
-	
-	// handle missing genetic map
-	if (! this->genmap_)
-	{
-		this->_genmap.cache.finish();
-	}
-	
-	std::cout << "Loading input data file:" << std::endl;
-	std::clog << "Loading input data file:" << std::endl;
-	
-	Runtime runtime;
-	ProgressMsg progress("data lines");
-	
-	unsigned long count = 0;
-	
-	// read input file
-	if (this->legend_ && this->input.require_legend) // legend provided & required
-	{
-		unsigned long n = this->_legend.cache.size();
+		std::clog << this->filter.comment << std::endl;
 		
-		while (this->input.read())
+		skip.push_back(i);
+		++n_skip;
+		skip_ = true;
+	}
+	
+	std::cout << "Loading input data" << std::endl;
+	std::clog << "Loading input data: " << this->line.source() << std::endl;
+	ProgressMsg progress("lines");
+	Runtime timer;
+	
+	std::string comment;
+	
+	// source markers
+	std::unordered_set<size_t> unique_pos;
+	
+	do
+	{
+		Marker marker(this->size);
+		
+		progress.update();
+		
+		// parse marker
+		if (parse_vcf_line(this->line, marker.info, marker.data, comment))
 		{
-			progress.update();
-			count += 1;
-			
-			if (n == 0)
+			// check unique position
+			if (unique_pos.count(marker.info.pos) != 0)
 			{
-				throw std::length_error("Input file contains more markers than provided in legend file");
+				this->log("Duplicate maker position");
+				continue;
 			}
-
-			// retrieve marker information from cached legend
-			MarkerInfo info = std::move(this->_legend.cache.front()); // move
-			char       flag = this->_legend.valid.front();
-
-			// pop cached legend
-			this->_legend.cache.pop_front();
-			this->_legend.valid.pop_front();
-			n -= 1;
+			unique_pos.insert(marker.info.pos);
 			
-			// ignore data if marker is not valid
-			if (! static_cast<bool>(flag))
+			// remove skipped samples
+			if (skip_)
 			{
+				for (size_t i = 0; i < n_skip; ++i)
+				{
+					if (! marker.data.erase(skip[i] - i)) // account for reduced size after previous skips
+					{
+						throw std::logic_error("Unexpected error while removing samples");
+					}
+				}
+			}
+			
+			// evaluate marker stats
+			if (! marker.stat.evaluate(marker.info, marker.data))
+			{
+				std::cout << marker.info.str() << std::endl;
+				this->log("Invalid allele definition");
 				continue;
 			}
 			
-			Marker marker(this->size);
-			
-			// parse marker
-			if (this->input.parse(marker.data))
+			// genetic map
+			if (this->genmap_)
 			{
-				marker.info = std::move(info); // move
-				marker.stat.eval(marker.info, marker.data);
-				marker.gmap = this->_genmap.cache.approx(marker.info);
-
-				// apply filters
-				if (this->filter.apply(marker.stat, this->input.count) &&
-					this->filter.apply(marker.data, this->input.count))
-				{
-					source.append(std::move(marker)); //move
-				}
-			}
-		}
-		
-		if (n != 0)
-		{
-			throw std::length_error("Input file contains less markers than provided in legend file");
-		}
-	}
-	else if (this->legend_ && !this->input.require_legend) // legend provided & NOT required
-	{
-		unsigned long n = this->_legend.cache.size();
-		
-		while (this->input.read())
-		{
-			progress.update();
-			count += 1;
-			
-			if (n == 0)
-			{
-				throw std::length_error("Input file contains more markers than provided in legend file");
+				marker.gmap = this->_genmap.approx(marker.info);
 			}
 			
-			// retrieve marker information from cached legend
-			MarkerInfo info = std::move(this->_legend.cache.front()); // move
-			char       flag = this->_legend.valid.front();
-			
-			// pop cached legend
-			this->_legend.cache.pop_front();
-			this->_legend.valid.pop_front();
-			n -= 1;
-			
-			// ignore data if marker is not valid
-			if (! static_cast<bool>(flag))
+			// filter marker
+			if (this->filter.apply(marker.info) &&
+				this->filter.apply(marker.data) &&
+				this->filter.apply(marker.stat) &&
+				this->filter.apply(marker.gmap) )
 			{
+				source.append(std::move(marker));
 				continue;
 			}
 			
-			Marker marker(this->size);
-			
-			// parse marker
-			if (this->input.parse(marker.info, marker.data))
-			{
-				if (info.pos != marker.info.pos)
-				{
-					throw std::invalid_argument(this->input.error("Marker positions do not match in input and legend files\n"
-																  "Expected position: " + std::to_string(marker.info.pos) + "\n"
-																  "Detected position: " + std::to_string(info.pos) + " (in legend file)", true, true));
-				}
-				
-				if (info.n_alleles() != marker.info.n_alleles())
-				{
-					throw std::invalid_argument(this->input.error("Number of alleles do not match in input and legend files\n"
-																  "Expected alleles: " + std::to_string(marker.info.n_alleles()) + "\n"
-																  "Detected alleles: " + std::to_string(info.n_alleles()) + " (in legend file)", true, true));
-				}
-				
-				marker.info = std::move(info); // move
-				marker.stat.eval(marker.info, marker.data);
-				marker.gmap = this->_genmap.cache.approx(marker.info);
-				
-				// apply filters
-				if (this->filter.apply(marker.stat, this->input.count) &&
-					this->filter.apply(marker.data, this->input.count))
-				{
-					source.append(std::move(marker)); //move
-				}
-			}
+			comment = this->filter.comment;
 		}
 		
-		if (n != 0)
-		{
-			throw std::length_error("Input file contains less markers than provided in legend file");
-		}
+		this->log(comment);
 	}
-	else if (!this->legend_ && !this->input.require_legend) // legend NOT provided & NOT required
-	{
-		while (this->input.read())
-		{
-			progress.update();
-			count += 1;
-			
-			Marker marker(this->size);
-			
-			// parse marker
-			if (this->input.parse(marker.info, marker.data))
-			{
-				marker.stat.eval(marker.info, marker.data);
-				marker.gmap = this->_genmap.cache.approx(marker.info);
-				
-				// apply filters
-				if (this->filter.apply(marker.info, this->input.count) &&
-					this->filter.apply(marker.stat, this->input.count) &&
-					this->filter.apply(marker.data, this->input.count))
-				{
-					source.append(std::move(marker)); //move
-				}
-			}
-		}
-	}
+	while (this->line.next());
 	
-	progress.finish();
-	std::clog << "Input data read: " << count << std::endl;
-	std::clog << runtime.str() << std::endl;
-	
-	// finish source
-	source.finish();
+	progress.finish(this->line.count());
+	std::clog << "Done! " << timer.str() << std::endl << std::endl;
 }
 
 

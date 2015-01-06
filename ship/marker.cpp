@@ -9,9 +9,6 @@
 #include "marker.h"
 
 
-#define DEBUG_MARKER
-
-
 //******************************************************************************
 // Marker containers
 //******************************************************************************
@@ -20,95 +17,78 @@
 // Marker data
 //
 
-
 MarkerData::MarkerData(const size_t _size)
-: data_(new Genotype[_size])
-, size_(_size)
+: data(_size)
+, n(_size)
 , i(0)
 , contains_unknown_(false)
-, cleared(false)
 {}
 
 MarkerData::MarkerData(const MarkerData & other)
-: data_(new Genotype[other.size_])
-, size_(other.size_)
+: data(other.data)
+, n(other.n)
 , i(other.i)
 , contains_unknown_(other.contains_unknown_)
-, cleared(other.cleared)
-{
-	std::copy(other.data_, other.data_ + other.size_, this->data_);
-}
+{}
 
 MarkerData::MarkerData(MarkerData && other)
-: data_(nullptr)
-, size_(other.size_)
+: data(std::move(other.data))
+, n(other.n)
 , i(other.i)
 , contains_unknown_(other.contains_unknown_)
-, cleared(other.cleared)
-{
-	this->data_ = other.data_;
-	other.data_ = nullptr;
-}
-
-MarkerData::~MarkerData()
-{
-	if (this->data_ != nullptr)
-		delete [] this->data_;
-}
+{}
 
 MarkerData & MarkerData::operator = (const MarkerData & other)
 {
+#ifdef DEBUG_MARKER
+	if (this->n != other.n)
+	{
+		throw std::runtime_error("Marker data was defined with different size");
+	}
+#endif
+	
 	if (this != &other)
 	{
-		if (this->data_ != nullptr)
-			delete [] this->data_;
-		
-		this->data_ = new Genotype[other.size_];
-		std::copy(other.data_, other.data_ + other.size_, this->data_);
-		
-		this->size_ = other.size_;
+		this->data = other.data;
+		this->n = other.n;
 		this->i = other.i;
 		this->contains_unknown_ = other.contains_unknown_;
-		this->cleared = other.cleared;
 	}
 	return *this;
 }
 
 MarkerData & MarkerData::operator = (MarkerData && other)
 {
+#ifdef DEBUG_MARKER
+	if (this->n != other.n)
+	{
+		throw std::runtime_error("Marker data was defined with different size");
+	}
+#endif
+	
 	if (this != &other)
 	{
-		if (this->data_ != nullptr)
-			delete [] this->data_;
-			
-		this->data_ = other.data_;
-		other.data_ = nullptr;
-		
-		this->size_ = other.size_;
+		this->data = std::move(other.data);
+		this->n = other.n;
 		this->i = other.i;
 		this->contains_unknown_ = other.contains_unknown_;
-		this->cleared = other.cleared;
 	}
 	return *this;
 }
 
 bool MarkerData::append(const Genotype & g)
 {
-#ifdef DEBUG_MARKER
-	if (this->cleared)
+	if (this->i < this->n)
 	{
-		throw std::runtime_error("Marker data was cleared");
-	}
-#endif
-	
-	if (this->i < this->size_)
-	{
-		if (g.h0.is_unknown() || g.h1.is_unknown())
+		if (! this->contains_unknown_)
 		{
-			this->contains_unknown_ = true;
+			if (g.h0.is_unknown() || g.h1.is_unknown())
+			{
+				this->contains_unknown_ = true;
+			}
 		}
 		
-		this->data_[this->i++] = g; // append
+		this->data[this->i++] = g; // append
 		
 		return true;
 	}
@@ -116,115 +96,77 @@ bool MarkerData::append(const Genotype & g)
 	return false;
 }
 
-void MarkerData::clear()
+bool MarkerData::erase(const size_t _i)
 {
-#ifdef DEBUG_MARKER
-	if (this->cleared)
+	if (_i >= this->i)
 	{
-		throw std::runtime_error("Marker data was cleared");
+		return false;
 	}
-#endif
 	
-	if (this->data_ != nullptr)
-		delete [] this->data_;
+	this->data.erase(this->data.begin() + _i);
 	
-	this->data_ = nullptr;
-	this->size_ = 0;
+	--this->n;
+	--this->i;
+	
+	return true;
+}
+
+void MarkerData::remove()
+{
+	std::vector<Genotype> x;
+	this->data.swap(x);
+	
+	this->n = 0;
 	this->i = 0;
 	this->contains_unknown_ = false;
-	this->cleared = true;
 }
 
 size_t MarkerData::size() const
 {
-#ifdef DEBUG_MARKER
-	if (this->cleared)
-	{
-		throw std::runtime_error("Marker data was cleared");
-	}
-#endif
-	return this->size_;
+	return this->n;
 }
 
 size_t MarkerData::count() const
 {
-#ifdef DEBUG_MARKER
-	if (this->cleared)
-	{
-		throw std::runtime_error("Marker data was cleared");
-	}
-#endif
 	return this->i;
 }
 
 bool MarkerData::is_complete() const
 {
-#ifdef DEBUG_MARKER
-	if (this->cleared)
-	{
-		throw std::runtime_error("Marker data was cleared");
-	}
-#endif
-	return (this->i == this->size_);
+	return (this->i == this->n);
 }
 
 bool MarkerData::contains_unknown() const
 {
-#ifdef DEBUG_MARKER
-	if (this->cleared)
-	{
-		throw std::runtime_error("Marker data was cleared");
-	}
-#endif
 	return this->contains_unknown_;
 }
 
-Genotype MarkerData::operator [] (const size_t _i) const
+const Genotype & MarkerData::operator [] (const size_t _i) const
 {
 #ifdef DEBUG_MARKER
-	if (this->cleared)
-	{
-		throw std::runtime_error("Marker data was cleared");
-	}
 	if (_i >= this->i)
 	{
-		throw std::out_of_range("Marker data out of range for index: " + std::to_string(_i));
+		throw std::out_of_range("Marker data out of range at index: " + std::to_string(_i));
 	}
 #endif
-	return this->data_[_i];
-}
-
-const Genotype & MarkerData::at(const size_t _i) const
-{
-#ifdef DEBUG_MARKER
-	if (this->cleared)
-	{
-		throw std::runtime_error("Marker data was cleared");
-	}
-	if (_i >= this->i)
-	{
-		throw std::out_of_range("Marker data out of range for index: " + std::to_string(_i));
-	}
-#endif
-	return this->data_[_i];
+	
+	return this->data[_i];
 }
 
 void MarkerData::print(std::ostream & stream, const char last) const
 {
 #ifdef DEBUG_MARKER
-	if (this->cleared)
+	if (! this->is_complete())
 	{
-		throw std::runtime_error("Marker data was cleared");
+		throw std::runtime_error("Marker data is not complete");
 	}
 #endif
 	
-	char sep = NULL;
+	stream << (int)this->data[0].h0 << ' ' << (int)this->data[0].h1;
 	
-	for (size_t i = 0; i < this->size_; ++i)
+	for (size_t k = 1; k < this->n; ++k)
 	{
-		const Genotype g = this->data_[i];
-		stream << sep << (int)g.h0 << ' ' << (int)g.h1;
-		sep = ' ';
+		stream << ' ' << (int)this->data[k].h0 << ' ' << (int)this->data[k].h1;
 	}
 	
 	if (last != '\0')
@@ -234,19 +176,17 @@ void MarkerData::print(std::ostream & stream, const char last) const
 void MarkerData::print(FILE * fp, const char last) const
 {
 #ifdef DEBUG_MARKER
-	if (this->cleared)
+	if (! this->is_complete())
 	{
-		throw std::runtime_error("Marker data was cleared");
+		throw std::runtime_error("Marker data is not complete");
 	}
 #endif
 	
-	char sep = NULL;
+	fprintf(fp, "%d %d", (int)this->data[i].h0, (int)this->data[i].h1);
 	
-	for (size_t i = 0; i < this->size_; ++i)
+	for (size_t k = 1; k < this->n; ++k)
 	{
-		const Genotype g = (Genotype)this->data_[i];
-		fprintf(fp, "%c%d %d", sep, (int)g.h0, (int)g.h1);
-		sep = ' ';
+		fprintf(fp, " %d %d", (int)this->data[k].h0, (int)this->data[k].h1);
 	}
 	
 	if (last != '\0')
@@ -292,10 +232,10 @@ MarkerInfo & MarkerInfo::operator = (const MarkerInfo & other)
 {
 	if (this != &other)
 	{
-        this->chr = other.chr;
-        this->pos = other.pos;
-        this->key = other.key;
-        this->allele = other.allele;
+		this->chr = other.chr;
+		this->pos = other.pos;
+		this->key = other.key;
+		this->allele = other.allele;
 	}
 	return *this;
 }
@@ -304,10 +244,10 @@ MarkerInfo & MarkerInfo::operator = (MarkerInfo && other)
 {
 	if (this != &other)
 	{
-        this->chr = other.chr;
-        this->pos = other.pos;
-        this->key = std::move(other.key);
-        this->allele = std::move(other.allele);
+		this->chr = other.chr;
+		this->pos = other.pos;
+		this->key = std::move(other.key);
+		this->allele = std::move(other.allele);
 	}
 	return *this;
 }
@@ -320,12 +260,12 @@ bool MarkerInfo::operator != (const MarkerInfo & other) const { return (this->po
 void MarkerInfo::print(std::ostream & stream, const char last) const
 {
 	stream << (int)this->chr << ' ' << this->pos << ' ' << this->key << ' ' << this->allele.size() << ' ';
-    this->allele.print(stream, last);
+	this->allele.print(stream, last);
 }
 
 void MarkerInfo::print(FILE * fp, const char last) const
 {
-	fprintf(fp, "%d %lu %s %du ", (int)this->chr, this->pos, this->key.c_str(), this->allele.size());
+	fprintf(fp, "%d %lu %s %d ", (int)this->chr, this->pos, this->key.c_str(), this->allele.size());
 	this->allele.print(fp, last);
 }
 
@@ -349,38 +289,43 @@ MarkerStat::MarkerStat()
 
 MarkerStat::MarkerStat(const MarkerStat & other)
 : evaluated(other.evaluated)
-, haplostat(other.haplostat)
-, genostat(other.genostat)
+, haplotype(other.haplotype)
+, genotype(other.genotype)
+, unknown_haplotype(other.unknown_haplotype)
+, unknown_genotype(other.unknown_genotype)
 {}
 
 MarkerStat::MarkerStat(MarkerStat && other)
 : evaluated(other.evaluated)
-, haplostat(std::move(other.haplostat))
-, genostat(std::move(other.genostat))
+, haplotype(std::move(other.haplotype))
+, genotype(std::move(other.genotype))
+, unknown_haplotype(std::move(other.unknown_haplotype))
+, unknown_genotype(std::move(other.unknown_genotype))
 {}
-
-MarkerStat::~MarkerStat()
-{
-	this->haplostat.clear();
-	this->genostat.clear();
-}
 
 MarkerStat & MarkerStat::operator = (const MarkerStat & other)
 {
 	if (this != &other)
 	{
 		this->evaluated = other.evaluated;
-		this->haplostat = other.haplostat;
-		this->genostat = other.genostat;
+		this->haplotype = other.haplotype;
+		this->genotype  = other.genotype;
+		this->unknown_haplotype = other.unknown_haplotype;
+		this->unknown_genotype  = other.unknown_genotype;
 	}
 	return *this;
 }
 
 MarkerStat & MarkerStat::operator = (MarkerStat && other)
 {
-	this->evaluated = other.evaluated;
-	this->haplostat = std::move(other.haplostat);
-	this->genostat = std::move(other.genostat);
+	if (this != &other)
+	{
+		this->evaluated = other.evaluated;
+		this->haplotype = std::move(other.haplotype);
+		this->genotype  = std::move(other.genotype);
+		this->unknown_haplotype = std::move(other.unknown_haplotype);
+		this->unknown_genotype  = std::move(other.unknown_genotype);
+	}
 	return *this;
 }
 
@@ -391,89 +336,85 @@ bool MarkerStat::evaluate(const MarkerInfo & info, const MarkerData & data)
 	{
 		throw std::logic_error("Marker statistics already calculated");
 	}
+	if (! data.is_complete())
+	{
+		throw std::logic_error("Marker data is not complete");
+	}
 #endif
 	
 	const size_t size = data.size();
 	
-	size_t table_h[ HAPLOTYPE_MAX + 2 ] = { 0 }; // haplotype counts
-	size_t table_g[ HAPLOTYPE_MAX + 2 ][ HAPLOTYPE_MAX + 2 ] = { 0 }; // genotype counts
+	size_t count_h[ HAPLOTYPE_MAX + 1 ] = { 0 }; // haplotype counts
+	size_t count_g[ HAPLOTYPE_MAX + 1 ][ HAPLOTYPE_MAX + 1 ] = { 0 }; // genotype counts
+	
+	Haplotype h0, h1;
+	bool flag;
 	
 	// walkabout data
 	for (size_t i = 0; i < size; ++i)
 	{
-		const Genotype g = data[i];
+		h0 = data[i].h0;
+		h1 = data[i].h1;
 		
-		// check if haplotypes are defined in allele list
-		if ((!g.h0.is_unknown() && !info.allele( (int)g.h0 )) ||
-			(!g.h1.is_unknown() && !info.allele( (int)g.h1 )) )
+		flag = true;
+		
+		// count first haplotype
+		if (h0.is_unknown())
 		{
-			return false;
+			++unknown_haplotype; // missing/undefined allele
+			flag = false;
+		}
+		else
+		{
+			if (info.allele.exists((int)h0)) // check if allele is defined
+				++count_h[ (int)h0 ];
+			else
+				return false;
 		}
 		
-		// count haplotypes
-		++table_h[ ((g.h0.is_unknown()) ? Haplotype::unknown: (int)g.h0) ];
-		++table_h[ ((g.h1.is_unknown()) ? Haplotype::unknown: (int)g.h1) ];
-		
-		// count genotype (in sorted order)
-		const Haplotype hX = std::min(g.h0, g.h1);
-		const Haplotype hY = std::max(g.h0, g.h1);
-		++table_g[ ((hX.is_unknown()) ? Haplotype::unknown: (int)hX) ][ ((hY.is_unknown()) ? Haplotype::unknown: (int)hY) ];
-	}
-	
-	
-	// insert expected haplotypes
-	for (int i = 0; i < info.allele.size(); ++i)
-	{
-		this->haplostat[ Haplotype(i) ] = Census();
-	}
-	
-	// insert counted haplotypes
-	for (int i = 0; i < HAPLOTYPE_MAX + 2; ++i)
-	{
-		if (table_h[i] != 0)
+		// count second haplotype
+		if (h1.is_unknown())
 		{
-			this->haplostat[ Haplotype(i) ] = table_h[i];
+			++this->unknown_haplotype; // missing/undefined allele
+			flag = false;
 		}
+		else
+		{
+			if (info.allele.exists((int)h1)) // check if allele is defined
+				++count_h[ (int)h1 ];
+			else
+				return false;
+		}
+		
+		// count genotype (sorted)
+		if (flag)
+			++count_g[ (int)std::min(h0, h1) ][ (int)std::min(h0, h1) ];
+		else
+			++this->unknown_genotype;
 	}
 	
-	// insert expected genotypes
+	
+	// insert haplotype count
+	for (int h = 0; h < info.allele.size(); ++h)
+	{
+		this->haplotype.append(h, Census(count_h[h], size * 2));  // scale: two haplotypes per genotype
+	}
+	
+	// insert genotype count
 	for (int i0 = 0; i0 < info.allele.size(); ++i0)
 	{
-		const Haplotype h0(i0);
+		h0 = i0;
 		
 		for (int i1 = i0; i1 < info.allele.size(); ++i1)
 		{
-			const Haplotype h1(i1);
+			h1 = i1;
 			
-			this->genostat[ Genotype(h0, h1) ] = Census();
+			this->genotype.append(Genotype(h0, h1), Census(count_g[h0][h1], size));
 		}
 	}
 	
-	// insert counted genotypes
-	for (int i0 = 0; i0 < HAPLOTYPE_MAX + 2; ++i0)
-	{
-		const Haplotype h0(i0);
-		
-		for (int i1 = i0; i1 < HAPLOTYPE_MAX + 2; ++i1)
-		{
-			if (table_g[i0][i1] != 0)
-			{
-				const Haplotype h1(i1);
-			
-				this->genostat[ Genotype(h0, h1) ] = table_g[i0][i1];
-			}
-		}
-	}
-	
-	// scale counts to get frequencies
-	for (std::map<Haplotype, Census>::iterator it = this->haplostat.begin(), end = this->haplostat.end(); it != end; ++it)
-	{
-		it->second.scale(size * 2); // two haplotypes per genotype
-	}
-	for (std::map<Genotype, Census>::iterator it = this->genostat.begin(), end = this->genostat.end(); it != end; ++it)
-	{
-		it->second.scale(size);
-	}
+	this->unknown_haplotype.scale(size * 2);
+	this->unknown_genotype.scale(size);
 	
 	this->evaluated = true;
 	
@@ -489,15 +430,7 @@ const Census & MarkerStat::operator [] (const Haplotype & h) const
 	}
 #endif
 	
-	try
-	{
-		return this->haplostat.at(h);
-	}
-	catch (std::out_of_range &)
-	{
-		throw std::out_of_range("Haplotype '" + std::to_string((int)h) + "' out of range");
-	}
-	return this->haplostat.at(h); // satisfy compiler
+	return this->haplotype[h];
 }
 
 const Census & MarkerStat::operator [] (const Genotype & g) const
@@ -509,18 +442,7 @@ const Census & MarkerStat::operator [] (const Genotype & g) const
 	}
 #endif
 	
-	const Haplotype hX = std::min(g.h0, g.h1);
-	const Haplotype hY = std::max(g.h0, g.h1);
-	
-	try
-	{
-		return this->genostat.at( Genotype(hX, hY) );
-	}
-	catch (std::out_of_range &)
-	{
-		throw std::out_of_range("Genotype (" + std::to_string((int)g.h0) + ", " + std::to_string((int)g.h1) + ") out of range");
-	}
-	return this->genostat.at( Genotype(hX, hY) ); // satisfy compiler
+	return this->genotype[ Genotype(std::min(g.h0, g.h1), std::max(g.h0, g.h1)) ];
 }
 
 void MarkerStat::print(std::ostream & stream, const char last) const
@@ -533,41 +455,61 @@ void MarkerStat::print(std::ostream & stream, const char last) const
 #endif
 	
 	char sep;
+	Genotype g;
+	
+	int i;
+	const int h_size = this->haplotype.size();
+	const int g_size = this->genotype.size();
 	
 	// allele_count
 	sep = NULL;
-	for (std::map<Haplotype, Census>::const_iterator it = this->haplostat.cbegin(), end = this->haplostat.cend(); it != end; ++it)
+	for (i = 0; i < h_size; ++i)
 	{
-		stream << sep << (int)it->first << ':' << (size_t)it->second;
+		stream << sep << i << ':' << (size_t)this->haplotype.census(i);
 		sep = ',';
 	}
 	stream << " ";
 	
 	// allele_freq
 	sep = NULL;
-	for (std::map<Haplotype, Census>::const_iterator it = this->haplostat.cbegin(), end = this->haplostat.cend(); it != end; ++it)
+	for (i = 0; i < h_size; ++i)
 	{
-		stream << sep << (int)it->first << ':' << std::setprecision(8) << (double)it->second;
+		stream << sep << i << ':' << std::setprecision(6) << (double)this->haplotype.census(i);
 		sep = ',';
 	}
 	stream << " ";
 	
+	// miss_allele_count
+	stream << (size_t)this->unknown_haplotype << " ";
+	
+	// miss_allele_freq
+	stream << std::setprecision(6) << (double)this->unknown_haplotype << " ";
+	
 	// genotype_count
 	sep = NULL;
-	for (std::map<Genotype, Census>::const_iterator it = this->genostat.cbegin(), end = this->genostat.cend(); it != end; ++it)
+	for (i = 0; i < g_size; ++i)
 	{
-		stream << sep << (int)it->first.h0 << '/' << (int)it->first.h1 << ':' << (size_t)it->second;
+		g = this->genotype.type(i);
+		stream << sep << g.h0 << '/' << g.h1 << ':' << (size_t)this->genotype.census(i);
 		sep = ',';
 	}
 	stream << " ";
 	
 	// genotype_freq
 	sep = NULL;
-	for (std::map<Genotype, Census>::const_iterator it = this->genostat.cbegin(), end = this->genostat.cend(); it != end; ++it)
+	for (i = 0; i < g_size; ++i)
 	{
-		stream << sep << (int)it->first.h0 << '/' << (int)it->first.h1 << ':' << std::setprecision(8) << (double)it->second;
+		g = this->genotype.type(i);
+		stream << sep << g.h0 << '/' << g.h1 << ':' << std::setprecision(6) << (double)this->genotype.census(i);
 		sep = ',';
 	}
+	stream << " ";
+	
+	// miss_allele_count
+	stream << (size_t)this->unknown_genotype << " ";
+	
+	// miss_allele_freq
+	stream << std::setprecision(6) << (double)this->unknown_genotype;
 	
 	if (last != '\0')
 		stream << last;
@@ -582,42 +524,45 @@ void MarkerStat::print(FILE * fp, const char last) const
 	}
 #endif
 	
-	char sep;
+	Genotype g;
+	
+	int i;
+	const int h_size = this->haplotype.size();
+	const int g_size = this->genotype.size();
 	
 	// allele_count
-	sep = NULL;
-	for (std::map<Haplotype, Census>::const_iterator it = this->haplostat.cbegin(), end = this->haplostat.cend(); it != end; ++it)
-	{
-		fprintf(fp, "%c%c:%lu", sep, (int)it->first, (size_t)it->second);
-		sep = ',';
-	}
-	fprintf(fp, " ");
+	fprintf(fp, "0:%lu", (size_t)this->haplotype.census(0));
+	for (i = 1; i < h_size; ++i)
+		fprintf(fp, ",%d:%lu", i, (size_t)this->haplotype.census(i));
 	
 	// allele_freq
-	sep = NULL;
-	for (std::map<Haplotype, Census>::const_iterator it = this->haplostat.cbegin(), end = this->haplostat.cend(); it != end; ++it)
-	{
-		fprintf(fp, "%c%c:%0.8f", sep, (int)it->first, (double)it->second);
-		sep = ',';
-	}
-	fprintf(fp, " ");
+	fprintf(fp, " 0:%0.6f", (double)this->haplotype.census(0));
+	for (i = 1; i < h_size; ++i)
+		fprintf(fp, ",%d:%0.6f", i, (double)this->haplotype.census(i));
+	
+	// miss_allele_count + miss_allele_freq
+	fprintf(fp, " %lu %0.6f", (size_t)this->unknown_haplotype, (double)this->unknown_haplotype);
 	
 	// genotype_count
-	sep = NULL;
-	for (std::map<Genotype, Census>::const_iterator it = this->genostat.cbegin(), end = this->genostat.cend(); it != end; ++it)
+	g = this->genotype.type(0);
+	fprintf(fp, " %d/%d:%lu", (int)g.h0, (int)g.h1, (size_t)this->genotype.census(0));
+	for (i = 1; i < g_size; ++i)
 	{
-		fprintf(fp, "%c%c/%c:%lu", sep, (int)it->first.h0,  (int)it->first.h1, (size_t)it->second);
-		sep = ',';
+		g = this->genotype.type(i);
+		fprintf(fp, ",%d/%d:%lu", (int)g.h0, (int)g.h1, (size_t)this->genotype.census(i));
 	}
-	fprintf(fp, " ");
 	
 	// genotype_freq
-	sep = NULL;
-	for (std::map<Genotype, Census>::const_iterator it = this->genostat.cbegin(), end = this->genostat.cend(); it != end; ++it)
+	g = this->genotype.type(0);
+	fprintf(fp, " %d/%d:%0.6f", (int)g.h0, (int)g.h1, (double)this->genotype.census(0));
+	for (i = 1; i < g_size; ++i)
 	{
-		fprintf(fp, "%c%c/%c:%0.8f", sep, (int)it->first.h0,  (int)it->first.h1, (double)it->second);
-		sep = ',';
+		g = this->genotype.type(i);
+		fprintf(fp, ",%d/%d:%0.6f", (int)g.h0, (int)g.h1, (double)this->genotype.census(i));
 	}
+	
+	// miss_genotype_count + miss_genotype_freq
+	fprintf(fp, " %lu %0.6f", (size_t)this->unknown_genotype, (double)this->unknown_genotype);
 	
 	if (last != '\0')
 		fprintf(fp, "%c", last);
@@ -630,7 +575,7 @@ std::string MarkerStat::str() const
 	return oss.str();
 }
 
-const std::string MarkerStat::header = "allele_count allele_freq genotype_count genotype_freq";
+const std::string MarkerStat::header = "allele_count allele_freq miss_allele_count miss_allele_freq genotype_count genotype_freq miss_genotype_count miss_genotype_freq";
 
 
 //
@@ -679,12 +624,18 @@ MarkerGmap & MarkerGmap::operator = (MarkerGmap && other)
 
 void MarkerGmap::print(std::ostream & stream, const char last) const
 {
-	stream << std::setprecision(8) << this->rate << ' ' << std::setprecision(8) << this->dist << ' ' << this->source << last;
+	if (last == '\0')
+		stream << std::setprecision(8) << this->rate << ' ' << std::setprecision(6) << this->dist << ' ' << this->source;
+	else
+		stream << std::setprecision(8) << this->rate << ' ' << std::setprecision(6) << this->dist << ' ' << this->source << last;
 }
 
 void MarkerGmap::print(FILE * fp, const char last) const
 {
-	fprintf(fp, "%0.8f %0.8f %c%c", this->rate, this->dist, this->source, last);
+	if (last == '\0')
+		fprintf(fp, "%0.6f %0.6f %c", this->rate, this->dist, this->source);
+	else
+		fprintf(fp, "%0.6f %0.6f %c%c", this->rate, this->dist, this->source, last);
 }
 
 std::string MarkerGmap::str() const
@@ -722,9 +673,6 @@ Marker::Marker(Marker && other)
 , gmap(std::move(other.gmap))
 , data(std::move(other.data))
 {}
-
-//Marker::~Marker()
-//{}
 
 Marker & Marker::operator = (const Marker & other)
 {

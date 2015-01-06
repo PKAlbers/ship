@@ -16,104 +16,36 @@
 // Sample containers
 //******************************************************************************
 
+#define SAMPLE_DATA_BLOCK_SIZE 32768 // 32Kb block
+
 //
 // Sample data
 //
 
-
 SampleData::Block::Block()
-: block(new Datatype[ SampleData::Block::n ])
+: block(SAMPLE_DATA_BLOCK_SIZE)
 , i(0)
 {}
 
-SampleData::Block::Block(const Block & other)
-: block(new Datatype[ SampleData::Block::n ])
-, i(other.i)
-{
-	std::copy(other.block, other.block + other.i, this->block);
-}
-
-SampleData::Block::Block(Block && other)
-: block(nullptr)
-, i(other.i)
-{
-	this->block = other.block;
-	other.block = nullptr;
-}
-
-SampleData::Block::~Block()
-{
-	if (this->block != nullptr)
-		delete [] this->block;
-}
-
-SampleData::Block & SampleData::Block::operator = (const Block & other)
-{
-	if (this != &other)
-	{
-		std::copy(other.block, other.block + SampleData::Block::n, this->block);
-		this->i = other.i;
-	}
-	return *this;
-}
-
-SampleData::Block & SampleData::Block::operator = (Block && other)
-{
-	if (this != &other)
-	{
-		delete [] this->block;
-		this->block = other.block;
-		other.block = nullptr;
-		this->i = other.i;
-	}
-	return *this;
-}
-
-const size_t SampleData::Block::n = 32768; // 32Kb block
-
 SampleData::SampleData()
-: collect(1)
+: collect(1) // first block
 , current(collect.rbegin())
-, data_(nullptr)
-, size_(0)
-, finished(false)
-, cleared(false)
+, n(0)
 {}
 
 SampleData::SampleData(const SampleData & other)
 : collect(other.collect)
 , current(collect.rbegin())
-, data_(nullptr)
-, size_(other.size_)
-, finished(other.finished)
-, cleared(other.cleared)
-{
-	if (this->finished)
-	{
-		this->data_ = new Datatype[ this->size_ ];
-		std::copy(other.data_, other.data_ + other.size_, this->data_);
-	}
-}
+, data(other.data)
+, n(other.n)
+{}
 
 SampleData::SampleData(SampleData && other)
 : collect(std::move(other.collect))
 , current(collect.rbegin())
-, data_(nullptr)
-, size_(other.size_)
-, finished(other.finished)
-, cleared(other.cleared)
-{
-	this->data_ = other.data_;
-	other.data_ = nullptr;
-}
-
-SampleData::~SampleData()
-{
-	this->collect.clear();
-	
-	if (this->data_ != nullptr)
-		delete [] this->data_;
-}
+, data(std::move(other.data))
+, n(other.n)
+{}
 
 SampleData & SampleData::operator = (const SampleData & other)
 {
@@ -121,21 +53,8 @@ SampleData & SampleData::operator = (const SampleData & other)
 	{
 		this->collect = other.collect;
 		this->current = this->collect.rbegin();
-		
-		if (this->finished && !this->cleared)
-		{
-			delete [] this->data_;
-		}
-		
-		if (other.finished && !other.cleared)
-		{
-			this->data_ = new Datatype[ other.size_ ];
-			std::copy(other.data_, other.data_ + other.size_, this->data_);
-		}
-		
-		this->size_ = other.size_;
-		this->finished = other.finished;
-		this->cleared = other.cleared;
+		this->data = other.data;
+		this->n = other.n;
 	}
 	return *this;
 }
@@ -146,18 +65,8 @@ SampleData & SampleData::operator = (SampleData && other)
 	{
 		this->collect.swap(other.collect);
 		this->current = this->collect.rbegin();
-		
-		if (this->finished && !this->cleared)
-		{
-			delete [] this->data_;
-		}
-		
-		this->data_ = other.data_;
-		other.data_ = nullptr;
-		
-		this->size_ = other.size_;
-		this->finished = other.finished;
-		this->cleared = other.cleared;
+		this->data.swap(other.data);
+		this->n = other.n;
 	}
 	return *this;
 }
@@ -165,19 +74,15 @@ SampleData & SampleData::operator = (SampleData && other)
 void SampleData::append(const Genotype & g)
 {
 #ifdef DEBUG_SAMPLE
-	if (cleared)
+	if (this->collect.size() == 0)
 	{
-		throw std::runtime_error("Sample data was cleared");
-	}
-	if (finished)
-	{
-		throw std::runtime_error("Sample data already finished");
+		throw std::runtime_error("Sample data empty");
 	}
 #endif
 	
 	size_t i = this->current->i;
-
-	if (i == SampleData::Block::n)
+	
+	if (i == SAMPLE_DATA_BLOCK_SIZE)
 	{
 		this->collect.push_back(Block());
 		this->current = this->collect.rbegin();
@@ -191,135 +96,81 @@ void SampleData::append(const Genotype & g)
 void SampleData::finish()
 {
 #ifdef DEBUG_SAMPLE
-	if (cleared)
-	{
-		throw std::runtime_error("Sample data was cleared");
-	}
-	if (finished)
+	if (this->collect.size() == 0)
 	{
 		throw std::runtime_error("Sample data already finished");
 	}
 #endif
 	
 	// get complete size
-	this->size_ = ((this->collect.size() - 1) * SampleData::Block::n) + this->current->i;
+	this->n = ((this->collect.size() - 1) * SAMPLE_DATA_BLOCK_SIZE) + this->current->i;
 	
-	// allocate memory
-	try
-	{
-		this->data_ = new Datatype[ this->size_ ];
-	}
-	catch (std::bad_alloc &)
-	{
-		throw std::runtime_error("Cannot allocate memory for " + std::to_string(this->size_) + " markers");
-	}
+	// allocate data
+	this->data.reserve(this->n);
 	
 	// copy data
-	size_t i = 0;
 	for (std::vector<Block>::const_iterator it = this->collect.cbegin(), end = this->collect.cend(); it != end; ++it)
 	{
-		std::copy(it->block, it->block + it->i, this->data_ + i);
-		i += it->i;
+		this->data.insert(this->data.cend(), it->block.cbegin(), it->block.cend());
 	}
 	
 	// clear data blocks
-	std::vector<Block> x;
-	this->collect.swap(x);
-	this->current = this->collect.rend();
+	std::vector<Block> _collect;
+	this->collect.swap(_collect);
 	
-	this->finished = true;
+	this->current = this->collect.rend();
 }
 
-void SampleData::clear()
+void SampleData::remove()
 {
-	if (this->data_ != nullptr)
-		delete [] this->data_;
+	std::vector<Block> _collect;
+	this->collect.swap(_collect);
 	
-	std::vector<Block> x;
-	this->collect.swap(x);
 	this->current = this->collect.rend();
 	
-	this->size_ = 0;
-	this->finished = false;
-	this->cleared = true;
+	std::vector<Datatype> _data;
+	this->data.swap(_data);
+	
+	this->n = 0;
 }
 
-Datatype SampleData::operator [] (const size_t i) const
+const Datatype & SampleData::operator [] (const size_t i) const
 {
 #ifdef DEBUG_SAMPLE
-	if (cleared)
+	if (this->collect.size() != 0)
 	{
-		throw std::runtime_error("Sample data was cleared");
+		throw std::runtime_error("Sample data not completed");
 	}
-	if (!finished)
-	{
-		throw std::runtime_error("Sample data not finished");
-	}
-	if (i >= this->size_)
+	if (i >= this->n)
 	{
 		throw std::out_of_range("Sample data out of range");
 	}
 #endif
 	
-	return this->data_[i];
-}
-
-const Datatype & SampleData::at(const size_t i) const
-{
-#ifdef DEBUG_SAMPLE
-	if (cleared)
-	{
-		throw std::runtime_error("Sample data was cleared");
-	}
-	if (!finished)
-	{
-		throw std::runtime_error("Sample data not finished");
-	}
-	if (i >= this->size_)
-	{
-		throw std::out_of_range("Sample data out of range");
-	}
-#endif
-	
-	return this->data_[i];
+	return this->data[i];
 }
 
 size_t SampleData::size() const
 {
-#ifdef DEBUG_SAMPLE
-	if (cleared)
-	{
-		throw std::runtime_error("Sample data was cleared");
-	}
-	if (!finished)
-	{
-		throw std::runtime_error("Sample data not finished");
-	}
-#endif
-	
-	return this->size_;
+	return this->n;
 }
 
 void SampleData::print(std::ostream & stream, const char last) const
 {
 #ifdef DEBUG_SAMPLE
-	if (cleared)
+	if (this->collect.size() != 0)
 	{
-		throw std::runtime_error("Sample data was cleared");
-	}
-	if (!finished)
-	{
-		throw std::runtime_error("Sample data not finished");
+		throw std::runtime_error("Sample data not completed");
 	}
 #endif
 	
-	char sep = NULL;
+	Genotype g = (Genotype)this->data[0];
+	stream << (int)g.h0 << ' ' << (int)g.h1;
 	
-	for (size_t i = 0; i < this->size_; ++i)
+	for (size_t i = 1; i < this->n; ++i)
 	{
-		const Genotype g = (Genotype)this->data_[i];
-		stream << sep << (int)g.h0 << ' ' << (int)g.h1;
-		sep = ' ';
+		g = (Genotype)this->data[i];
+		stream << ' ' << (int)g.h0 << ' ' << (int)g.h1;
 	}
 	
 	if (last != '\0')
@@ -329,23 +180,19 @@ void SampleData::print(std::ostream & stream, const char last) const
 void SampleData::print(FILE * fp, const char last) const
 {
 #ifdef DEBUG_SAMPLE
-	if (cleared)
+	if (this->collect.size() != 0)
 	{
-		throw std::runtime_error("Sample data was cleared");
-	}
-	if (!finished)
-	{
-		throw std::runtime_error("Sample data not finished");
+		throw std::runtime_error("Sample data not completed");
 	}
 #endif
 	
-	char sep = NULL;
+	Genotype g = (Genotype)this->data[0];
+	fprintf(fp, "%d %d", (int)g.h0, (int)g.h1);
 	
-	for (size_t i = 0; i < this->size_; ++i)
+	for (size_t i = 1; i < this->n; ++i)
 	{
-		const Genotype g = (Genotype)this->data_[i];
-		fprintf(fp, "%c%d %d", sep, (int)g.h0, (int)g.h1);
-		sep = ' ';
+		g = (Genotype)this->data[i];
+		fprintf(fp, " %d %d", (int)g.h0, (int)g.h1);
 	}
 	
 	if (last != '\0')
@@ -365,24 +212,28 @@ std::string SampleData::str() const
 //
 
 SampleInfo::SampleInfo()
-: key(SampleInfo::unknown_key)
-, pop(SampleInfo::unknown_pop)
+: key(".")
+, pop(".")
+, grp(".")
 {}
 
 SampleInfo::SampleInfo(const SampleInfo & other)
 : key(other.key)
 , pop(other.pop)
+, grp(other.grp)
 {}
 
 SampleInfo::SampleInfo(SampleInfo && other)
 : key(std::move(other.key))
 , pop(std::move(other.pop))
+, grp(std::move(other.grp))
 {}
 
 SampleInfo::~SampleInfo()
 {
 	this->key.clear();
 	this->pop.clear();
+	this->grp.clear();
 }
 
 SampleInfo & SampleInfo::operator = (const SampleInfo & other)
@@ -391,6 +242,7 @@ SampleInfo & SampleInfo::operator = (const SampleInfo & other)
 	{
 		this->key = other.key;
 		this->pop = other.pop;
+		this->grp = other.grp;
 	}
 	return *this;
 }
@@ -401,23 +253,27 @@ SampleInfo & SampleInfo::operator = (SampleInfo && other)
 	{
 		this->key = std::move(other.key);
 		this->pop = std::move(other.pop);
+		this->grp = std::move(other.grp);
 	}
 	return *this;
 }
 
-bool SampleInfo::operator <  (const SampleInfo & other) const { return (this->pop == other.pop) ? (this->key <  other.key): (this->pop <  other.pop); }
-bool SampleInfo::operator >  (const SampleInfo & other) const { return (this->pop == other.pop) ? (this->key >  other.key): (this->pop >  other.pop); }
+bool SampleInfo::operator <  (const SampleInfo & other) const { return (this->grp == other.grp) ? ((this->pop == other.pop) ? (this->key <  other.key): (this->pop <  other.pop)): (this->grp <  other.grp); }
+bool SampleInfo::operator >  (const SampleInfo & other) const { return (this->grp == other.grp) ? ((this->pop == other.pop) ? (this->key >  other.key): (this->pop >  other.pop)): (this->grp >  other.grp); }
 bool SampleInfo::operator == (const SampleInfo & other) const {	return (this->key == other.key); } // compare sample ID only
 bool SampleInfo::operator != (const SampleInfo & other) const { return (this->key != other.key); } // compare sample ID only
 
 void SampleInfo::print(std::ostream & stream, const char last) const
 {
-	stream << this->key <<  ' ' << this->pop << last;
+	stream << this->key <<  ' ' << this->pop <<  ' ' << this->grp << last;
 }
 
 void SampleInfo::print(FILE * fp, const char last) const
 {
-	fprintf(fp, "%s %s%c", this->key.c_str(), this->pop.c_str(), last);
+	if (last != '\0')
+		fprintf(fp, "%s %s %s%c", this->key.c_str(), this->pop.c_str(), this->grp.c_str(), last);
+	else
+		fprintf(fp, "%s %s %s", this->key.c_str(), this->pop.c_str(), this->grp.c_str());
 }
 
 std::string SampleInfo::str() const
@@ -427,9 +283,7 @@ std::string SampleInfo::str() const
 	return oss.str();
 }
 
-const std::string SampleInfo::unknown_key = ".";
-const std::string SampleInfo::unknown_pop = ".";
-const std::string SampleInfo::header = "sample_id sample_pop";
+const std::string SampleInfo::header = "sample_id sample_pop sample_group";
 
 
 //
@@ -449,9 +303,6 @@ Sample::Sample(Sample && other)
 , data(std::move(other.data))
 {}
 
-//Sample::~Sample() 
-//{}
-
 Sample & Sample::operator = (const Sample & other)
 {
 	if (this != &other)
@@ -464,6 +315,7 @@ Sample & Sample::operator = (const Sample & other)
 
 Sample & Sample::operator = (Sample && other)
 {
+	std::cout << "sample" << std::endl;
 	if (this != &other)
 	{
 		this->info = std::move(other.info);

@@ -1,13 +1,13 @@
 //
-//  types.h
+//  types.hpp
 //  ship
 //
-//  Created by Patrick Albers on 07.11.2014.
+//  Created by Patrick Albers on 12.12.2014.
 //  Copyright (c) 2014 Patrick K. Albers. All rights reserved.
 //
 
-#ifndef __ship__types__
-#define __ship__types__
+#ifndef ship_types_hpp
+#define ship_types_hpp
 
 #include <stdio.h>
 #include <stdint.h>
@@ -40,10 +40,12 @@ private:
 	
 public:
 	
+	static const char unknown = 0; // unknown chromosome
+	
 	// check if unknown
 	bool is_unknown() const
 	{
-		return (this->value == -1);
+		return (this->value == Chromosome::unknown);
 	}
 	
 	// cast
@@ -52,14 +54,22 @@ public:
 		return static_cast<int>(this->value);
 	}
 	
-	// compare
-	bool operator == (const Chromosome & other)
+	// compare/sort
+	bool operator <  (const Chromosome & other) const { return (this->value <  other.value); }
+	bool operator >  (const Chromosome & other) const { return (this->value >  other.value); }
+	bool operator == (const Chromosome & other) const { return (this->value == other.value); }
+	bool operator != (const Chromosome & other) const { return (this->value != other.value); }
+	
+	// match chromosome with unknown being ambiguous
+	bool match(const Chromosome & other) const
 	{
+		if (this->value == Chromosome::unknown ||
+			other.value == Chromosome::unknown)
+		{
+			return true;
+		}
+		
 		return (this->value == other.value);
-	}
-	bool operator != (const Chromosome & other)
-	{
-		return (this->value != other.value);
 	}
 	
 	// assign
@@ -70,17 +80,17 @@ public:
 	}
 	Chromosome & operator = (const int i)
 	{
-		this->value = (i < 1 || i > CHAR_MAX)? -1: i; // reserve -1 for unknown
+		this->value = (i < 1 || i > CHAR_MAX)? Chromosome::unknown: i; // reserve -1 for unknown
 		return *this;
 	}
 	
 	// construct
 	Chromosome()
-	: value(0) // unknown
+	: value(Chromosome::unknown) // unknown
 	{}
 	Chromosome(const int i)
 	{
-		this->value = (i < 1 || i > CHAR_MAX)? -1: i; // reserve -1 for unknown
+		this->value = (i < 1 || i > CHAR_MAX)? Chromosome::unknown: i; // reserve -1 for unknown
 	}
 	
 	friend class std::hash<Chromosome>;
@@ -103,23 +113,23 @@ public:
 	
 	static const unsigned char unknown = HAPLOTYPE_MAX + 1; // unknown haplotype
 	
+	// check if value is unknown
 	bool is_unknown() const
 	{
-		return (this->value == HAPLOTYPE_MAX + 1);
+		return (this->value == Haplotype::unknown);
 	}
 	
 	// cast
 	operator int () const
 	{
-		return (this->value == HAPLOTYPE_MAX + 1) ? -1: static_cast<int>(this->value);
+		return (this->value == Haplotype::unknown) ? -1: static_cast<int>(this->value);
 	}
 	
 	// compare/sort
-	bool operator <  (const Haplotype & other) { return (this->value <  other.value); }
-	bool operator >  (const Haplotype & other) { return (this->value >  other.value); }
-	bool operator == (const Haplotype & other) { return (this->value == other.value); }
-	bool operator != (const Haplotype & other) { return (this->value != other.value); }
-	
+	bool operator <  (const Haplotype & other) const { return (this->value <  other.value); }
+	bool operator >  (const Haplotype & other) const { return (this->value >  other.value); }
+	bool operator == (const Haplotype & other) const { return (this->value == other.value); }
+	bool operator != (const Haplotype & other) const { return (this->value != other.value); }
 	
 	// assign
 	Haplotype & operator = (const Haplotype & other)
@@ -129,20 +139,19 @@ public:
 	}
 	Haplotype & operator = (const int i)
 	{
-		this->value = (i < 0 || i > HAPLOTYPE_MAX) ? HAPLOTYPE_MAX + 1: i; // reserve 15 (00001111) for unknown
+		this->value = (i < 0 || i > HAPLOTYPE_MAX) ? Haplotype::unknown: i; // reserve 15 (00001111) for unknown
 		return *this;
 	}
 	
 	// construct
 	Haplotype()
-	: value(0) // unknown
+	: value(Haplotype::unknown) // unknown
 	{}
 	Haplotype(const int i)
 	{
-		this->value = (i < 0 || i > HAPLOTYPE_MAX) ? HAPLOTYPE_MAX + 1: i; // reserve 15 (00001111) for unknown
+		this->value = (i < 0 || i > HAPLOTYPE_MAX) ? Haplotype::unknown: i; // reserve 15 (00001111) for unknown
 	}
 	
-	friend class Genotype;
 	friend class Datatype;
 	friend class std::hash<Haplotype>;
 	friend class std::hash<Genotype>;
@@ -160,10 +169,10 @@ public:
 	Haplotype h1; // 2nd haplotype
 	
 	// compare/sort
-	bool operator <  (const Genotype & other) { return (this->h0 == other.h0) ? (this->h1 <  other.h1): (this->h0 <  other.h0); }
-	bool operator >  (const Genotype & other) { return (this->h0 == other.h0) ? (this->h1 >  other.h1): (this->h0 >  other.h0); }
-	bool operator == (const Genotype & other) { return (this->h0 == other.h0  && this->h1 == other.h1); }
-	bool operator != (const Genotype & other) { return (this->h0 != other.h0  || this->h1 != other.h1); }
+	bool operator <  (const Genotype & other) const { return (this->h0 == other.h0) ? (this->h1 <  other.h1): (this->h0 <  other.h0); }
+	bool operator >  (const Genotype & other) const { return (this->h0 == other.h0) ? (this->h1 >  other.h1): (this->h0 >  other.h0); }
+	bool operator == (const Genotype & other) const { return (this->h0 == other.h0  && this->h1 == other.h1); }
+	bool operator != (const Genotype & other) const { return (this->h0 != other.h0  || this->h1 != other.h1); }
 	
 	// construct
 	Genotype()
@@ -195,12 +204,6 @@ public:
 		return g;
 	}
 	
-	// return genotype
-	Genotype operator () ()
-	{
-		return static_cast<Genotype>(*this);
-	}
-	
 	// assign
 	Datatype & operator = (const Datatype & other)
 	{
@@ -214,7 +217,9 @@ public:
 	}
 	
 	// construct
-	Datatype();
+	Datatype()
+	: value(Haplotype::unknown << 4 | Haplotype::unknown)
+	{}
 	Datatype(const Genotype & _g)
 	: value(_g.h0.value << 4 | _g.h1.value)
 	{}
@@ -231,8 +236,7 @@ public:
 //
 namespace std
 {
-	template <>
-	struct hash<Chromosome>
+	template <> struct hash<Chromosome>
 	{
 		size_t operator () (const Chromosome & _c) const
 		{
@@ -240,8 +244,7 @@ namespace std
 		}
 	};
 	
-	template <>
-	struct hash<Haplotype>
+	template <> struct hash<Haplotype>
 	{
 		size_t operator () (const Haplotype & _h) const
 		{
@@ -249,8 +252,7 @@ namespace std
 		}
 	};
 	
-	template <>
-	struct hash<Genotype>
+	template <> struct hash<Genotype>
 	{
 		size_t operator () (const Genotype & _g) const
 		{
@@ -258,8 +260,7 @@ namespace std
 		}
 	};
 	
-	template <>
-	struct hash<Datatype>
+	template <> struct hash<Datatype>
 	{
 		size_t operator () (const Datatype & _d) const
 		{
@@ -270,4 +271,4 @@ namespace std
 
 
 
-#endif /* defined(__ship__types__) */
+#endif

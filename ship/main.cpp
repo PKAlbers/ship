@@ -9,18 +9,19 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <vector>
+#include <unordered_map>
 #include <exception>
 #include <stdexcept>
 
-#include "types.h"
+#include "command.h"
 #include "timer.h"
-//#include "input.h"
-#include "sample.h"
-#include "marker.h"
-#include "genmap.h"
+#include "input.h"
+#include "census.h"
 #include "source.h"
-//#include "shared.h"
+#include "shared.h"
 
+#include "stream.h"
 
 //
 // SHIP
@@ -30,79 +31,14 @@ const std::string copyright = "(C) Patrick K. Albers - University of Oxford";
 
 
 //
-// Usage, explaining command line arguments
-//
-void usage()
-{
-	std::cout
-	<< std::endl <<
-	
-	"Usage:\n\n"
-	
-	<< std::endl;
-}
-
-
-//
 // Exception error message
 //
-void error(const std::exception & x, const std::string msg = "")
+int error(const std::string & msg, const std::exception & except)
 {
-	std::cerr << std::endl;
-	
-	if (msg.size() != 0)
-	{
-		std::cerr << msg << std::endl;
-	}
-	
-	try
-	{
-		throw;
-	}
-	catch (const std::logic_error & x)		{ std::cerr << "# Logic error" << std::endl; }
-	catch (const std::domain_error & x)		{ std::cerr << "# Domain error" << std::endl; }
-	catch (const std::invalid_argument & x)	{ std::cerr << "# Invalid argument" << std::endl; }
-	catch (const std::length_error & x)		{ std::cerr << "# Length error" << std::endl; }
-	catch (const std::out_of_range & x)		{ std::cerr << "# Out of range error" << std::endl; }
-	catch (const std::runtime_error & x)	{ std::cerr << "# Runtime error" << std::endl; }
-	catch (const std::range_error & x)		{ std::cerr << "# Range error" << std::endl; }
-	catch (const std::overflow_error & x)	{ std::cerr << "# overflow error" << std::endl; }
-	catch (const std::underflow_error & x)	{ std::cerr << "# Underflow error" << std::endl; }
-	catch (const std::bad_alloc & x)		{ std::cerr << "# Memory error" << std::endl; }
-	catch (const std::exception & x)		{ std::cerr << "# Unexpected error" << std::endl; }
-	
-	std::cerr << x.what() << std::endl;
-	std::cerr << "# Execution terminated" << std::endl;
+	std::cout << std::endl << msg << std::endl << except.what() << std::endl << "Execution halted" << std::endl;
+	std::cerr << std::endl << msg << std::endl << except.what() << std::endl << "Execution halted" << std::endl;
+	return EXIT_FAILURE;
 }
-
-struct Redirect
-{
-	std::streambuf * clog;
-	std::streambuf * cerr;
-	
-	std::ofstream flog;
-	std::ofstream ferr;
-	
-	Redirect(const std::string & prefix)
-	: flog(prefix + ".log.txt")
-	, ferr(prefix + ".err.txt")
-	{
-		this->clog = std::clog.rdbuf();
-		this->cerr = std::cerr.rdbuf();
-		
-		std::clog.rdbuf(this->flog.rdbuf());
-		std::cerr.rdbuf(this->ferr.rdbuf());
-	}
-	
-	~Redirect()
-	{
-		std::clog.rdbuf(this->clog);
-		std::cerr.rdbuf(this->cerr);
-		
-		this->flog.close();
-		this->ferr.close();
-	}
-};
 
 
 //
@@ -110,162 +46,80 @@ struct Redirect
 //
 int main(int argc, const char * argv[])
 {
+	std::cout << std::endl;
 	std::cout << signature << std::endl << copyright << std::endl << std::endl;
 	
 	Runtime runtime;
 	
+	
 	//
 	// parse command line arguments
 	//
-	std::string arg_input;
-	std::string arg_output;
-	std::string arg_cutoff;
-	std::string arg_legend;
-	std::string arg_sample;
-	std::string arg_genmap;
-	std::string arg_format;
-	std::string arg_chromo;
-	bool arg_input_  = false;
-	bool arg_output_ = false;
-	bool arg_cutoff_ = false;
-	bool arg_legend_ = false;
-	bool arg_sample_ = false;
-	bool arg_genmap_ = false;
-	bool arg_format_ = false;
-	bool arg_chromo_ = false;
+	CommandLine cmd(argc, argv);
 	
-	while (argc > 1 && argv[1][0] == '-')
+	cmd.register_par(0);
+	cmd.register_arg("i", 1, true); // input file
+	cmd.register_arg("t", 1, true); // rare variant threshold
+	cmd.register_arg("o", 1, false); // output file prefix
+	cmd.register_arg("s", 1, false); // sample file
+	cmd.register_arg("m", 1, false); // genetic map
+	
+	if(! cmd.parse())
 	{
-		switch (argv[1][1])
-		{
-			case 'i': // input file
-				arg_input  = argv[2];
-				arg_input_ = true;
-				++argv; --argc; break;
-			case 'o': // output file prefix
-				arg_output  = argv[2];
-				arg_output_ = true;
-				++argv; --argc; break;
-			case 't': // rare variant threshold
-				arg_cutoff  = argv[2];
-				arg_cutoff_ = true;
-				++argv; --argc; break;
-			case 'l': // legend file
-				arg_legend  = argv[2];
-				arg_legend_ = true;
-				++argv; --argc; break;
-			case 's': // sample file
-				arg_sample  = argv[2];
-				arg_sample_ = true;
-				++argv; --argc; break;
-			case 'm': // genetic map
-				arg_genmap  = argv[2];
-				arg_genmap_ = true;
-				++argv; --argc; break;
-				
-				// other options
-			case '-':
-				if (std::string(argv[1] + 2) == "enforce-format") // format
-				{
-					arg_format  = argv[2];
-					arg_format_ = true;
-					++argv; --argc; break;
-				}
-				if (std::string(argv[1] + 2) == "chromosome") // chromosome
-				{
-					arg_chromo  = argv[2];
-					arg_chromo_ = true;
-					++argv; --argc; break;
-				}
-				else
-				{
-					std::cerr << "Unknown command line option: " << argv[1] << std::endl;
-					usage();
-					return 1;
-				}
-				break;
-			default:
-				std::cerr << "Unknown command line argument: " << argv[1] << std::endl;
-				usage();
-				break;
-				return 1;
-		}
-		
-		++argv; --argc;
+		return EXIT_FAILURE;
 	}
 	
 	
 	//
-	// check required arguments
+	// create output files
 	//
-	if (!arg_input_)
+	std::string prefix = (cmd.is_arg("o")) ? cmd.arg("o"): cmd.prog() + "." + timestamp(true);
+	
+	StreamLogErr __logerr__(prefix); // redirect log & err streams
+	
+	StreamOut marker_file; // output markers
+	StreamOut sample_file; // output samples
+	
+	try
 	{
-		std::cerr << "No input file specified" << std::endl;
-		usage();
-		return 1;
+		marker_file.open(prefix + ".marker");
+		sample_file.open(prefix + ".sample");
 	}
-	if (!arg_output_)
+	catch (const std::exception & x)
 	{
-		std::cerr << "No output file prefix specified" << std::endl;
-		usage();
-		return 1;
+		return error("Error while creating output files", x);
 	}
-	if (!arg_cutoff_)
-	{
-		std::cerr << "No rare variant threshold specified" << std::endl;
-		usage();
-		return 1;
-	}
-
+	
+	std::clog << signature << std::endl << copyright << std::endl << std::endl;
+	
 	
 	//
-	// redirect log & err output to files
-	//
-	Redirect redirect(arg_output);
-	
-	//
-	// Determine threshold
+	// Determine rare variant threshold
 	//
 	Cutoff cutoff;
 	try
 	{
-		cutoff.parse(arg_cutoff);
+		cutoff.parse(cmd.arg("t"));
 	}
 	catch (const std::exception & x)
 	{
-		error(x, "Error while reading command line");
-		return 1;
+		return error("Error while interpreting command line", x);
 	}
-	
-	/*
-	
-	//
-	// Assume chromosome
-	//
-	if (arg_chromo_)
-	{
-		Chromosome(std::stoi(arg_chromo));
-	}
-	
-	//
-	// Define filters
-	//
-	FilterInput filter;
-	// ...
 	
 	
 	//
 	// print command line arguments
 	//
-	std::cout << "Input file:             "  << arg_input  << std::endl;
-	std::cout << "Output file prefix:     "  << arg_output << std::endl;
-	std::cout << "Rare variant threshold: "  << arg_cutoff << std::endl;
+	std::cout << std::setw(25) << std::left << "Input file: "  << cmd.arg("i") << std::endl;
 	
-	if (arg_sample_) std::cout << "Sample file:            "  << arg_sample << std::endl;
-	if (arg_legend_) std::cout << "Legend file:            "  << arg_legend << std::endl;
-	if (arg_genmap_) std::cout << "Genetic map file:       "  << arg_genmap << std::endl;
-	if (arg_format_) std::cout << "Format of input file:   "  << arg_format << std::endl;
-	if (arg_chromo_) std::cout << "Assumed chromosome:     "  << arg_chromo << std::endl;
+	if (cmd.is_arg("s")) std::cout << std::setw(25) << std::left << "Sample file: "  << (std::string)cmd.arg("s") << std::endl;
+	if (cmd.is_arg("g")) std::cout << std::setw(25) << std::left << "Genetic map: "  << (std::string)cmd.arg("g") << std::endl;
+	
+	std::cout << std::setw(25) << std::left << "Rare variant threshold: "  << (std::string)cmd.arg("t") << std::endl;
+	
+	std::cout << std::setw(25) << std::left << "Output files:" << std::endl;
+	std::cout << std::setw(5) << std::left << " " << sample_file.name << std::endl;
+	std::cout << std::setw(5) << std::left << " " << marker_file.name << std::endl;
 	
 	std::cout << std::endl;
 	
@@ -274,58 +128,26 @@ int main(int argc, const char * argv[])
 	// Load source data
 	//
 	Source source;
+	
 	try
 	{
-		InputFormat format = InputFormat::UNKNOWN;
+		Input_VCF input(cmd.arg("i"));
 		
-		// enforce input file format
-		if (arg_format_)
-		{
-			std::cout << "Enforced input file format: " << std::flush;
-			
-			switch (arg_format[0])
-			{
-				case 'v': format = InputFormat::VCF; std::cout << "VCF" << std::endl; break;
-				case 'h': format = InputFormat::HAP; std::cout << "Haplotype format" << std::endl; break;
-				case 'g': format = InputFormat::GEN; std::cout << "Genotype format" << std::endl; break;
-				default:
-					throw std::invalid_argument("Unknown input file format: " + arg_format);
-					break;
-			}
-		}
+		input.filter.markerinfo.remove_if_contains_other();
+		input.filter.markerdata.remove_if_contains_unknown();
 		
-		// scan input file format
-		ScanInput scan(arg_input, format);
-
-		if (! arg_format_)
-		{
-			std::cout << "Detected input file format: " << std::flush;
-			
-			switch (scan.format)
-			{
-				case InputFormat::VCF: std::cout << "VCF" << std::endl;
-				case InputFormat::HAP: std::cout << "Haplotype format" << std::endl;
-				case InputFormat::GEN: std::cout << "Genotype format" << std::endl;
-				case InputFormat::UNKNOWN:
-				default:
-					std::cout << "unknown" << std::endl;
-			}
-		}
+		if (cmd.is_arg("s")) input.sample(cmd.arg("s"));
+		if (cmd.is_arg("g")) input.genmap(cmd.arg("g"));
 		
-		// load input file into source
-		LoadInput input(scan, filter);
+		input.run(source);
 		
-		if (arg_sample_) input.sample(arg_sample); // provide sample file
-		if (arg_legend_) input.legend(arg_legend); // provide legend file
-		if (arg_genmap_) input.genmap(arg_genmap); // provide genmap file
-		
-		input.load(source);
+		source.finish();
 	}
 	catch (std::exception & x)
 	{
-		error(x, "Error while loading input files");
-		return 1;
+		return error("Error while reading input files", x);
 	}
+	std::cout << std::endl;
 	
 	// scale cutoff with sample size
 	try
@@ -334,24 +156,58 @@ int main(int argc, const char * argv[])
 	}
 	catch (const std::exception & x)
 	{
-		error(x, "Error while applying threshold");
-		return 1;
+		return error("Error while applying threshold", x);
 	}
 	
 	// print source dimensions
-	std::cout << "# samples: " << source.sample_size() << std::endl;
-	std::cout << "# markers: " << source.marker_size() << std::endl;
+	std::cout << "Analysed samples: " << source.sample_size() << std::endl;
+	std::cout << "Analysed markers: " << source.marker_size() << std::endl;
 	std::cout << std::endl;
 	
-//	std::cout << "checkpoint: ";
-//	std::string x;
-//	std::cin >> x;
 	
-	 */
-	 
+	//
+	// Write marker & sample information
+	//
+	
+	// sample
+	std::cout << "Writing sample information: " << std::flush;
+	
+	sample_file.line(SampleInfo::header);
+	
+	for (size_t i = 0; i < source.sample_size(); ++i)
+	{
+		source.sample(i).info.print(sample_file, '\n');
+	}
+	sample_file.close();
+	std::cout << "OK" << std::endl;
+	
+	// marker
+	std::cout << "Writing marker information: " << std::flush;
+	
+	marker_file.line(MarkerInfo::header, ' ');
+	marker_file.line(MarkerStat::header, ' ');
+	marker_file.line(MarkerGmap::header, '\n');
+	
+	for (size_t i = 0; i < source.marker_size(); ++i)
+	{
+		source.marker(i).info.print(marker_file, ' ');
+		source.marker(i).stat.print(marker_file, ' ');
+		source.marker(i).gmap.print(marker_file, '\n');
+	}
+	marker_file.close();
+	std::cout << "OK" << std::endl;
+	
+	
+	//
+	// Identify rare variants
+	//
+	std::cout << "Identifying rare alleles" << std::endl;
+	RareHaplotype rare(source, cutoff);
+	std::cout << "Identified alleles: " << rare.n_allele << " (in " << rare.n_marker << " markers)" << std::endl;
+	
 	std::cout << std::endl << "Done!" << std::endl << runtime.str() << std::endl;
 	
-	return 0;
+	return EXIT_SUCCESS;
 }
 
 

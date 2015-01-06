@@ -13,18 +13,62 @@
 #include <stdint.h>
 #include <vector>
 
-#include "types.h"
-#include "sample.h"
-#include "marker.h"
+#include "types.hpp"
+#include "timer.h"
+#include "source.h"
+
+
+
+struct SharedHaplotype
+{
+	const Haplotype allele;
+	const std::vector<Marker>::const_iterator marker;
+	const std::vector< std::vector<Sample>::const_iterator > sample;
+};
+
+
+class SharedList
+{
+private:
+	
+	std::vector<SharedHaplotype> list;
+	const std::vector<Marker>::const_iterator beg;
+	const std::vector<Marker>::const_iterator end;
+	size_t n;
+	
+public:
+	
+	operator std::vector<Marker>::const_iterator () const;
+	
+	bool next();
+	bool prev();
+	
+	// construct
+	SharedList(const std::vector<Marker> &);
+};
+
+
+
+struct RareHaplotype
+{
+	std::vector< std::pair<const Marker *, Haplotype> > list;
+	size_t n_marker, n_allele;
+	
+	// construct
+	RareHaplotype(const Source &, const Census &);
+};
+
+
+
 
 
 //******************************************************************************
 // Shared haplotype containers
 //******************************************************************************
 
-
-struct SharedTree
-{
+/*
+ struct SharedTree
+ {
 	// subsample sharing haplotype
 	std::vector<Sample*> subsample;
 	unsigned long n_sample; // number of samples
@@ -48,8 +92,8 @@ struct SharedTree
 	
 	// destruct
 	~SharedTree();
-};
-
+ };
+ */
 
 
 #endif /* defined(__ship__shared__) */

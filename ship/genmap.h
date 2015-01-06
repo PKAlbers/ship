@@ -12,7 +12,7 @@
 #include <stdio.h>
 #include <map>
 
-#include "types.h"
+#include "types.hpp"
 #include "marker.h"
 
 
@@ -25,10 +25,10 @@
 //
 struct GenmapInfo
 {
-	Chromosome    chr;    // chromosome
-	unsigned long pos;    // position
-	double        rate;   // recombination rate (cM/Mb)
-	double        dist;   // genetic distance (cM)
+	Chromosome chr;  // chromosome
+	size_t     pos;  // position
+	double     rate; // recombination rate (cM/Mb)
+	double     dist; // genetic distance (cM)
 	
 	// compare/sort
 	bool operator <  (const GenmapInfo &) const;
@@ -44,9 +44,6 @@ struct GenmapInfo
 	GenmapInfo();
 	GenmapInfo(const GenmapInfo &);
 	GenmapInfo(GenmapInfo &&);
-	
-//	// destruct
-//	~GenmapInfo();
 };
 
 
@@ -57,12 +54,13 @@ class Genmap
 {
 private:
 	
-	std::map<unsigned long, GenmapInfo> genmap; // genetic map, by position
+	Chromosome chromosome; // chromosome of this genetic map
+	std::map<size_t, GenmapInfo> genmap; // genetic map, by position
 	double median_rate_; // median recombination rate (cM/Mb)
 	double median_dist_; // median distance (cM) between sites
-	bool good; // flag that genmap is complete
+	bool finished; // flag that genmap is complete
 	
-	unsigned long size_; // number of mapped positions in cargo
+	size_t size_; // number of mapped positions in genetic map
 	
 	// calculate median of rates
 	void median_rate();
@@ -74,7 +72,6 @@ public:
 	
 	// insert new mapped position
 	void insert(const GenmapInfo &);
-	void insert(GenmapInfo &&);
 	
 	// finish loading of mapped positions
 	void finish();
@@ -83,7 +80,7 @@ public:
 	MarkerGmap approx(const MarkerInfo &) const;
 	
 	// return size
-	unsigned long size() const;
+	size_t size() const;
 	
 	// assign
 	Genmap & operator = (const Genmap &);

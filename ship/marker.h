@@ -17,10 +17,14 @@
 #include <sstream>
 #include <iomanip>
 #include <utility>
+#include <stdexcept>
 
-#include "types.h"
+#include "types.hpp"
 #include "census.h"
 #include "allele.h"
+
+
+#define DEBUG_MARKER
 
 
 //******************************************************************************
@@ -34,17 +38,15 @@ class MarkerData
 {
 private:
 	
-	Genotype * data_; // genotype array
-	size_t     size_; // full size
-	size_t     i;     // increment for appending
+	std::vector<Genotype> data; // genotype array
+	size_t n; // full size
+	size_t i; // increment for appending
 	bool contains_unknown_; // flag that data contains unknown haplotypes
-	bool cleared; // flag that data was cleared
 	
 public:
 	
-	// return genotype element
-	Genotype operator [] (const size_t) const; // return copy
-	const Genotype &  at (const size_t) const; // return reference
+	// return genotype
+	const Genotype & operator [] (const size_t) const;
 	
 	// check if array is completely filled
 	bool is_complete() const;
@@ -52,17 +54,18 @@ public:
 	// check if any haplotype is unknown
 	bool contains_unknown() const;
 	
-	// return size
+	// return size/count
 	size_t size() const;
-	
-	// return current count
 	size_t count() const;
 	
-	// append element
+	// append genotype
 	bool append(const Genotype &);
 	
+	// erase genotype
+	bool erase(const size_t);
+	
 	// remove all data
-	void clear();
+	void remove();
 	
 	// print to stream
 	void print(std::ostream &, const char = '\0') const;
@@ -79,9 +82,6 @@ public:
 	MarkerData(const size_t); // default
 	MarkerData(const MarkerData &); // copy
 	MarkerData(MarkerData &&); // move
-
-	// destruct
-	~MarkerData();
 };
 
 
@@ -93,9 +93,9 @@ struct MarkerInfo
 	Chromosome  chr; // chromosome
 	size_t      pos; // position
 	std::string key; // identifier
-	AlleleList  allele; // alleles
+	AlleleList  allele; // allele list
 	
-	// compare/sort
+	// compare/sort, by position
 	bool operator <  (const MarkerInfo & other) const;
 	bool operator >  (const MarkerInfo & other) const;
 	bool operator == (const MarkerInfo & other) const;
@@ -137,8 +137,10 @@ private:
 	
 public:
 	
-	std::map<Haplotype, Census> haplostat; // expected haplotypes (alleles)
-	std::map<Genotype,  Census> genostat; // expected genotypes
+	CensusList<Haplotype> haplotype; // expected haplotypes (alleles)
+	CensusList<Genotype>  genotype;  // expected genotypes
+	Census unknown_haplotype; // missing/undefined haplotypes (alleles)
+	Census unknown_genotype;  // missing/undefined genotypes
 	
 	// evaluate allele list and genotype data
 	bool evaluate(const MarkerInfo &, const MarkerData &);
@@ -165,9 +167,6 @@ public:
 	MarkerStat(); // default
 	MarkerStat(const MarkerStat &); // copy
 	MarkerStat(MarkerStat &&); // move
-	
-	// destruct
-	~MarkerStat();
 };
 
 
@@ -231,9 +230,6 @@ struct Marker
 	Marker(const size_t); // default
 	Marker(const Marker &); // copy
 	Marker(Marker &&); // move
-	
-	// destruct
-	//~Marker();
 };
 
 

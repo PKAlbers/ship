@@ -102,16 +102,16 @@ public:
 	// return allele
 	const Allele & operator [] (const int) const;
 	
-	// check if corresponding allele is present
-	bool operator () (const int) const;
+	// check if corresponding allele exists
+	bool exists(const int) const;
 	
-    // print to stream
-    void print(std::ostream &, const char = '\0') const;
-    void print(FILE *, const char = '\0') const;
-    
-    // convert to string
-    std::string str() const;
-    
+	// print to stream
+	void print(std::ostream &, const char = '\0') const;
+	void print(FILE *, const char = '\0') const;
+	
+	// convert to string
+	std::string str() const;
+	
 	// assign
 	AlleleList & operator = (const AlleleList &);
 	AlleleList & operator = (AlleleList &&);

@@ -8,6 +8,7 @@
 
 #include "genmap.h"
 
+#define DEBUG_GENMAP
 
 //******************************************************************************
 // Genetic map container
@@ -36,9 +37,6 @@ GenmapInfo::GenmapInfo(GenmapInfo && other)
 , rate(other.rate)
 , dist(other.dist)
 {}
-
-//GenmapInfo::~GenmapInfo()
-//{}
 
 GenmapInfo & GenmapInfo::operator = (const GenmapInfo & other)
 {
@@ -71,23 +69,25 @@ bool GenmapInfo::operator != (const GenmapInfo & other) const { return (this->po
 Genmap::Genmap()
 : median_rate_(0)
 , median_dist_(0)
-, good(false)
+, finished(false)
 , size_(0)
 {}
 
 Genmap::Genmap(const Genmap & other)
-: genmap(other.genmap)
+: chromosome(other.chromosome)
+, genmap(other.genmap)
 , median_rate_(other.median_rate_)
 , median_dist_(other.median_dist_)
-, good(other.good)
+, finished(other.finished)
 , size_(other.size_)
 {}
 
 Genmap::Genmap(Genmap && other)
-: genmap(std::move(other.genmap))
+: chromosome(other.chromosome)
+, genmap(std::move(other.genmap))
 , median_rate_(other.median_rate_)
 , median_dist_(other.median_dist_)
-, good(other.good)
+, finished(other.finished)
 , size_(other.size_)
 {}
 
@@ -95,10 +95,11 @@ Genmap & Genmap::operator = (const Genmap & other)
 {
 	if (this != &other)
 	{
+		this->chromosome = other.chromosome;
 		this->genmap = other.genmap;
 		this->median_rate_ = other.median_rate_;
 		this->median_dist_ = other.median_dist_;
-		this->good = other.good;
+		this->finished = other.finished;
 		this->size_ = other.size_;
 	}
 	return *this;
@@ -108,10 +109,11 @@ Genmap & Genmap::operator = (Genmap && other)
 {
 	if (this != &other)
 	{
+		this->chromosome = other.chromosome;
 		this->genmap = std::move(other.genmap);
 		this->median_rate_ = other.median_rate_;
 		this->median_dist_ = other.median_dist_;
-		this->good = other.good;
+		this->finished = other.finished;
 		this->size_ = other.size_;
 	}
 	return *this;
@@ -124,7 +126,7 @@ Genmap::~Genmap()
 
 void Genmap::median_rate()
 {
-	const unsigned long n = this->genmap.size();
+	const size_t n = this->genmap.size();
 	
 	if (n == 0)
 	{
@@ -136,19 +138,20 @@ void Genmap::median_rate()
 	r.reserve(n);
 	
 	// collect rates
-	for (std::map<unsigned long, GenmapInfo>::const_iterator it = this->genmap.begin(), end = this->genmap.end(); it != end; ++it)
+	for (std::map<size_t, GenmapInfo>::const_iterator it = this->genmap.begin(), end = this->genmap.end(); it != end; ++it)
 	{
 		r.push_back(it->second.rate);
 	}
 	
 	std::sort(r.begin(), r.end()); // sort rates
 	
+	// calculate median rate
 	this->median_rate_ = (n % 2 == 0) ? (r[ (n / 2) - 1 ] + r[ n / 2 ]) / 2: r[ n / 2 ];
 }
 
 void Genmap::median_dist()
 {
-	const unsigned long n = this->genmap.size();
+	const size_t n = this->genmap.size();
 	
 	if (n == 0)
 	{
@@ -159,7 +162,7 @@ void Genmap::median_dist()
 	std::vector<double> d;
 	d.reserve(n);
 	
-	std::map<unsigned long, GenmapInfo>::const_iterator prev, curr, end = this->genmap.end();
+	std::map<size_t, GenmapInfo>::const_iterator prev, curr, end = this->genmap.end();
 	curr = this->genmap.begin();
 	prev = curr++;
 	
@@ -179,52 +182,75 @@ void Genmap::median_dist()
 	
 	std::sort(d.begin(), d.end()); // sort distances
 	
+	// calculate median distance
 	this->median_dist_ = (n % 2 == 0) ? (d[ (n / 2) - 1 ] + d[ n / 2 ]) / 2: d[ n / 2 ];
 }
 
 void Genmap::insert(const GenmapInfo & info)
 {
-	if (this->good)
+#ifdef DEBUG_GENMAP
+	if (this->finished)
 	{
 		throw std::logic_error("Loading of genetic map already completed");
-		return;
 	}
+#endif
 	
 	// insert if first
 	if (this->genmap.size() == 0)
 	{
+		this->chromosome = info.chr;
 		this->genmap[ info.pos ] = info;
 		this->size_ += 1;
 		return;
 	}
 	
+	// replace unknown chromosome with first known
+	if (this->chromosome.is_unknown() && !info.chr.is_unknown())
+	{
+		this->chromosome = info.chr;
+	}
+	
+	// match chromosome
+	if (! this->chromosome.match(info.chr))
+	{
+		throw std::invalid_argument("Genetic map contains multiple chromosomes\n"
+									"Expected chromosome: " + std::to_string((int)this->chromosome) + "\n"
+									"Detected chromosome: " + std::to_string((int)info.chr) + " "
+									"(at position '" + std::to_string(info.pos) + "')");
+	}
+	
 	// check duplicate
 	if (this->genmap.count(info.pos) != 0)
 	{
-		throw std::invalid_argument("Duplicate position in genetic map");
-		return;
+		throw std::invalid_argument("Duplicate position '" + std::to_string(info.pos) + "' in genetic map");
 	}
 	
-	std::map<unsigned long, GenmapInfo>::const_iterator next = this->genmap.upper_bound(info.pos);
+	std::map<size_t, GenmapInfo>::const_iterator next = this->genmap.upper_bound(info.pos);
 	
 	// check upper bound distance
 	if (next != this->genmap.end())
 	{
 		if (next->second.dist < info.dist)
 		{
-			throw std::invalid_argument("Genetic distance in genetic map is lower at following physical position");
-			return;
+			throw std::invalid_argument("Genetic distance at position '" +
+										std::to_string(info.pos) +
+										"' is lower at following physical position '" +
+										std::to_string(next->second.pos) +
+										"'");
 		}
 		
 		// check lower bound distance
 		if (next != this->genmap.begin())
 		{
-			std::map<unsigned long, GenmapInfo>::const_iterator prev = --next;
+			std::map<size_t, GenmapInfo>::const_iterator prev = --next;
 			
 			if (prev->second.dist > info.dist)
 			{
-				throw std::invalid_argument("Genetic distance in genetic map is larger at previous physical position");
-				return;
+				throw std::invalid_argument("Genetic distance at position '" +
+											std::to_string(info.pos) +
+											"' is greater at previous physical position '" +
+											std::to_string(prev->second.pos) +
+											"'");
 			}
 		}
 	}
@@ -233,82 +259,47 @@ void Genmap::insert(const GenmapInfo & info)
 	this->size_ += 1;
 }
 
-void Genmap::insert(GenmapInfo && info)
-{
-	if (this->good)
-	{
-		throw std::logic_error("Loading of genetic map already completed");
-		return;
-	}
-	
-	// insert if first
-	if (this->genmap.size() == 0)
-	{
-		this->genmap[ info.pos ] = std::move(info);
-		this->size_ += 1;
-		return;
-	}
-	
-	// check duplicate
-	if (this->genmap.count(info.pos) != 0)
-	{
-		throw std::invalid_argument("Duplicate position in genetic map");
-		return;
-	}
-	
-	std::map<unsigned long, GenmapInfo>::const_iterator next = this->genmap.upper_bound(info.pos);
-	
-	// check upper bound distance
-	if (next != this->genmap.end())
-	{
-		if (next->second.dist < info.dist)
-		{
-			throw std::invalid_argument("Genetic distance in genetic map is lower at following physical position");
-			return;
-		}
-		
-		// check lower bound distance
-		if (next != this->genmap.begin())
-		{
-			std::map<unsigned long, GenmapInfo>::const_iterator prev = --next;
-			
-			if (prev->second.dist > info.dist)
-			{
-				throw std::invalid_argument("Genetic distance in genetic map is larger at previous physical position");
-				return;
-			}
-		}
-	}
-	
-	this->genmap[ info.pos ] = std::move(info);
-	this->size_ += 1;
-}
-
 void Genmap::finish()
 {
-	if (this->good)
+#ifdef DEBUG_GENMAP
+	if (this->finished)
+	{
 		throw std::logic_error("Loading of genetic map already completed");
+	}
+#endif
 	
 	this->median_rate();
 	this->median_dist();
-	this->good = true;
+	this->finished = true;
 }
 
 MarkerGmap Genmap::approx(const MarkerInfo & marker) const
 {
-	if (! this->good)
-		throw std::logic_error("Loading of genetic map not finished");
+#ifdef DEBUG_GENMAP
+	if (! this->finished)
+	{
+		throw std::logic_error("Loading of genetic map not completed");
+	}
+#endif
 	
-	MarkerGmap gmap; // return type
+	// check chromosome
+	if (! this->chromosome.match(marker.chr))
+	{
+		throw std::invalid_argument("Genetic map has different chromosome\n"
+									"Expected chromosome: " + std::to_string(this->chromosome) +
+									"Detected chromosome: " + std::to_string(marker.chr));
+	}
+	
+	MarkerGmap gmap;
 	
 	// return empty, if no mapped positions were provided
-	if (this->genmap.size() == 0)
+	if (this->size_ == 0)
 	{
 		return gmap;
 	}
 	
 	// return without approximating, if present
-	std::map<unsigned long, GenmapInfo>::const_iterator match = this->genmap.find(marker.pos);
+	std::map<size_t, GenmapInfo>::const_iterator match = this->genmap.find(marker.pos);
 	if (match != this->genmap.end())
 	{
 		gmap.rate = match->second.rate;
@@ -318,7 +309,7 @@ MarkerGmap Genmap::approx(const MarkerInfo & marker) const
 	}
 	
 	// extrapolation
-	std::map<unsigned long, GenmapInfo>::const_iterator upper = this->genmap.upper_bound(marker.pos);
+	std::map<size_t, GenmapInfo>::const_iterator upper = this->genmap.upper_bound(marker.pos);
 	
 	// extrapolate, after end
 	if (upper == this->genmap.end())
@@ -339,8 +330,7 @@ MarkerGmap Genmap::approx(const MarkerInfo & marker) const
 	}
 	
 	// linear interpolation
-	std::map<unsigned long, GenmapInfo>::const_iterator lower;
-	lower = std::prev(upper);
+	std::map<size_t, GenmapInfo>::const_iterator lower = std::prev(upper);
 	
 	double inter_pos = static_cast<double>(marker.pos);
 	double lower_pos = static_cast<double>(lower->second.pos);
@@ -354,7 +344,7 @@ MarkerGmap Genmap::approx(const MarkerInfo & marker) const
 	return gmap;
 }
 
-unsigned long Genmap::size() const
+size_t Genmap::size() const
 {
 	return this->size_;
 }

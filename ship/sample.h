@@ -21,7 +21,7 @@
 #include <sstream>
 #include <new>
 
-#include "types.h"
+#include "types.hpp"
 
 
 //******************************************************************************
@@ -38,31 +38,17 @@ private:
 	// collect types in data blocks
 	struct Block
 	{
-		Datatype * block; // data block
+		std::vector<Datatype> block; // data block
 		size_t i; // increment counter
 		
-		static const size_t n; // default size
-		
-		// assign
-		Block & operator = (const Block &);
-		Block & operator = (Block &&);
-		
-		// construct
-		Block();
-		Block(const Block &);
-		Block(Block &&);
-		
-		// destruct
-		~Block();
+		Block(); // construct
 	};
 	
-	std::vector<Block> collect;
-	std::vector<Block>::reverse_iterator current;
+	std::vector<Block> collect; // temp collection of data in memory blocks
+	std::vector<Block>::reverse_iterator current; // pointer to current block
 	
-	Datatype * data_;
-	size_t     size_;
-	bool finished;
-	bool cleared;
+	std::vector<Datatype> data; // data array
+	size_t n; // number of markers
 	
 public:
 	
@@ -72,15 +58,14 @@ public:
 	// compile types from data blocks
 	void finish();
 	
-	// clear all data
-	void clear();
+	// remove all data
+	void remove();
 	
 	// return size
 	size_t size() const;
 	
 	// return type
-	Datatype operator [] (const size_t) const;
-	const Datatype & at(const size_t) const;
+	const Datatype & operator [] (const size_t) const;
 	
 	// print to stream
 	void print(std::ostream &, const char = '\0') const;
@@ -97,9 +82,6 @@ public:
 	SampleData();
 	SampleData(const SampleData &);
 	SampleData(SampleData &&);
-	
-	// destruct
-	~SampleData();
 };
 
 
@@ -110,15 +92,13 @@ struct SampleInfo
 {
 	std::string key; // unique sample identifier
 	std::string pop; // population
-	
-	static const std::string unknown_key; // unknown individual ID
-	static const std::string unknown_pop; // unknown population
+	std::string grp; // larger population group
 	
 	// compare/sort
-	bool operator <  (const SampleInfo & other) const;
-	bool operator >  (const SampleInfo & other) const;
-	bool operator == (const SampleInfo & other) const;
-	bool operator != (const SampleInfo & other) const;
+	bool operator <  (const SampleInfo & other) const; // by grp & pop & key
+	bool operator >  (const SampleInfo & other) const; // by grp & pop & key
+	bool operator == (const SampleInfo & other) const; // by key
+	bool operator != (const SampleInfo & other) const; // by key
 	
 	// print to stream
 	void print(std::ostream &, const char = '\0') const;
@@ -166,9 +146,6 @@ struct Sample
 	Sample(); // default
 	Sample(const Sample &); // copy
 	Sample(Sample &&); // move
-	
-	// destruct
-	//~Sample();
 };
 
 

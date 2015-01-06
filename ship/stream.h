@@ -13,70 +13,80 @@
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
+#include <ctype.h>
+#include <zlib.h>
 #include <iostream>
 #include <fstream>
+#include <vector>
 #include <string>
 #include <sstream>
 #include <stdexcept>
-#include <zlib.h>
 
 
 //******************************************************************************
-// Reading files by line
+// Stream file by lines
 //******************************************************************************
-
-//
-// Stream file lines
-//
 class StreamLine
 {
 private:
 	
-	FILE * file_text_stream; // stream for uncompressed, i.e. text file
-	gzFile file_gzip_stream; // stream for compressed, i.e. binary file
-	char * buff;             // buffer for chunks
-	bool good_;              // flag that stream was opened
-	bool compressed_;        // flag that reading from compressed file
+	union Stream
+	{
+		FILE * fp; // stream for uncompressed, i.e. text file
+		gzFile gz; // stream for compressed, i.e. binary file
+	};
 	
-	// determine file type, text or compressed/binary
-	void compressed(const std::string &);
+	Stream      stream; // file/gzip stream
+	bool        opened; // flag that stream was opened
+	size_t      n_line; // line count
+	const int   length; // buffer read length
+	std::vector<char> buffer; // read line buffer
+	char * bufptr;
+	char * bufend;
+	std::vector<char*> cache;
+	std::vector<char*>::const_iterator use, end;
+	bool eof;
 	
-	// read next chunk from file
-	bool chunk();
+	std::string file;   // source file
+	bool        cmpr;   // flag that file is gzip compressed
+	
+	// detect gzip compression
+	void gzip();
+	
+	// read line into buffer
+	bool read();
 	
 public:
 	
-	std::string name;    // file name
-	char * line;         // line buffer
-	unsigned long count; // current line count
+	// return line pointer
+	operator char * () const;
+	
+	// return line as string
+	std::string str() const;
+	
+	// return line count
+	size_t count() const;
+	
+	// return file name
+	std::string source() const;
 	
 	// open stream
 	void open(const std::string &);
 	
-	// check if opened
-	bool is_open() const;
-	
 	// close stream
 	void close();
 	
-	// read next line from stream
-	bool read();
-	
-	// return to start of file after reading
+	// reset stream
 	void reset();
 	
-	// count lines in file
-	unsigned long count_lines();
+	// forward to next line
+	bool next();
 	
-	// count fields in first line
-	unsigned long count_fields();
-	
-	// error message
-	std::string error(const std::string, const bool = false, const bool = false, const bool = false) const;
-	
-	// construct / destruct
+	// construct
 	StreamLine();
-	StreamLine(const std::string & filename);
+	StreamLine(const std::string &);
+	
+	// destruct
 	~StreamLine();
 	
 	// do not copy
@@ -85,50 +95,115 @@ public:
 };
 
 
-//
-// Parse line into tokens
-//
-class ParseLine
+
+
+
+//******************************************************************************
+// Split line into tokens
+//******************************************************************************
+class StreamSplit
 {
 private:
 	
-	const char * l; // line char array
-	size_t i; // position on array
-	size_t n; // max size of token
+	std::vector<char> del; // delimiter chars
+	char *ptr, * beg, * end;
+	size_t n;
 	
-	// custom seperator
-	const char sep;  // seperate when char is encountered
-	const bool sep_; // flag that seperator was defined
+	static const char * def; // default delimiters
 	
 public:
 	
-	char * token; // extracted chars
-	size_t width; // number of chars
-	size_t count; // count of tokens
-	
-	// parse next token
-	bool next();
-	
-	// parse next token
-	bool next(const char);
-	
-	// check token contains only numeric chars (interger/float)
-	bool is_numeric() const;
+	// return token pointer
+	operator char * () const;
 	
 	// convert to type
-	template<typename T>
-	explicit operator T () const;
+	bool convert(int &);
+	bool convert(size_t &);
+	bool convert(double &);
 	
-	// construct/destruct
-	ParseLine(const char *);
-	ParseLine(const char *, const char);
-	~ParseLine();
+	// return token as string
+	std::string str() const;
+	
+	// return token count
+	size_t count() const;
+	
+	// return token length
+	size_t size() const;
+	
+	// forward to next token, optionally break at seperator
+	bool next();
+	
+	// construct
+	StreamSplit(char *, const char * = StreamSplit::def);
+	StreamSplit(std::string &, const char * = StreamSplit::def);
+	
+	// destruct
+	//~StreamSplit();
 	
 	// do not copy
-	ParseLine(const ParseLine &) = delete;
-	ParseLine & operator = (const ParseLine &) = delete;
+	StreamSplit(const StreamSplit &) = delete;
+	StreamSplit & operator = (const StreamSplit &) = delete;
 };
 
+
+
+//******************************************************************************
+// Write to file
+//******************************************************************************
+class StreamOut
+{
+private:
+	
+	FILE * fp; // file pointer
+	bool good; // flag that file was opened
+	
+public:
+	
+	std::string name; // file name
+	
+	// cast file pointer
+	operator FILE * () const;
+	
+	// write string as line
+	void line(const std::string &, const char = '\n') const;
+	
+	// open stream
+	void open(const std::string &);
+	
+	// close stream
+	void close();
+	
+	// construct/destruct
+	StreamOut();
+	StreamOut(const std::string &);
+	~StreamOut();
+	
+	// do not copy
+	StreamOut(const StreamOut &) = delete;
+	StreamOut & operator = (const StreamOut &) = delete;
+};
+
+
+
+//******************************************************************************
+// Redirect log & err streams
+//******************************************************************************
+class StreamLogErr
+{
+private:
+	
+	std::ofstream flog;
+	std::ofstream ferr;
+	
+	std::streambuf * clog;
+	std::streambuf * cerr;
+	
+public:
+	
+	// construct/destruct
+	StreamLogErr(const std::string &);
+	~StreamLogErr();
+};
 
 
 #endif /* defined(__ship__stream__) */

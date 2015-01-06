@@ -12,8 +12,14 @@
 #include <stdio.h>
 #include <math.h>
 #include <string>
+#include <vector>
 #include <sstream>
+#include <unordered_map>
+#include <utility>
 #include <stdexcept>
+
+
+#define DEBUG_CENSUS
 
 
 //******************************************************************************
@@ -29,7 +35,7 @@ protected:
 	
 	size_t n; // number
 	double f; // frequency
-	bool scaled_; // flag that number was scaled to yield frequency
+	bool scaled; // flag that number was scaled to yield frequency
 	
 public:
 	
@@ -38,10 +44,7 @@ public:
 	Census & operator -- ();
 	
 	// scale number/frequency given size
-	void scale(const size_t);
-	
-	// check if scaled
-	bool scaled() const;
+	virtual void scale(const size_t);
 	
 	// assign count
 	Census & operator = (const size_t);
@@ -81,21 +84,184 @@ public:
 	// construct
 	Census();
 	Census(const size_t);
+	Census(const size_t, const size_t);
 	Census(const Census &);
 	Census(Census &&);
 };
 
 
+
 //
-// Commandline threshold container
+// Threshold container
 //
-struct Cutoff : public Census
+class Cutoff : public Census
 {
+private:
+	
+	bool n_; // flag that count was provided
+	bool f_; // flag that freq. was provided
+	
+public:
+	
 	// parse command line value
-	void parse(const std::string & str);
+	void parse(const std::string &);
 	
 	// scale using sample size
-	void size(const size_t);
+	void scale(const size_t);
+	
+	Cutoff();
+};
+
+
+
+//
+// Number & frequency list
+//
+template <class Type>
+class CensusList
+{
+private:
+	
+	bool indexed;
+	std::unordered_map<Type, int> index; // type points to index in list
+	std::vector<Type> type_; // type list
+	std::vector<Census> census_; // census list
+	int n;
+	
+public:
+	
+	// return census from type
+	const Census & operator [] (const Type & _type) const
+	{
+#ifdef DEBUG_CENSUS
+		if (this->index.count(_type) == 0)
+		{
+			throw std::invalid_argument("Census type does not exist");
+		}
+#endif
+		
+		return this->census_[ this->index.at(_type) ];
+	}
+	
+	// return census from index
+	const Census & census(const int _i) const
+	{
+#ifdef DEBUG_CENSUS
+		if (_i >= this->n)
+		{
+			throw std::out_of_range("Census index out of range");
+		}
+#endif
+		return this->census_[ _i ];
+	}
+	
+	// return type from index
+	const Type & type(const int _i) const
+	{
+#ifdef DEBUG_CENSUS
+		if (_i >= this->n)
+		{
+			throw std::out_of_range("Census index out of range");
+		}
+#endif
+		return this->type_[ _i ];
+	}
+	
+	// return size
+	int size() const
+	{
+		return this->n;
+	}
+	
+	// append type, with census
+	bool append(const Type & _type)
+	{
+#ifdef DEBUG_CENSUS
+		if (this->index_.count(_type) != 0)
+			return false;
+#endif
+		this->index_[ _type ] = this->n;
+		this->types_.push_back(_type);
+		this->census_.push_back(Census());
+		++this->n;
+		return true;
+	}
+	
+	bool append(const Type & _type, const Census & _census)
+	{
+		
+#ifdef DEBUG_CENSUS
+		if (this->index.count(_type) != 0)
+			return false;
+#endif
+		this->index[ _type ] = this->n;
+		this->type_.push_back(_type);
+		this->census_.push_back(_census);
+		++this->n;
+		return true;
+	}
+	
+	bool append(const Type & _type, Census && _census)
+	{
+		
+#ifdef DEBUG_CENSUS
+		if (this->index.count(_type) != 0)
+			return false;
+#endif
+		this->index[ _type ] = this->n;
+		this->type_.push_back(_type);
+		this->census_.push_back(std::move(_census));
+		++this->n;
+		return true;
+	}
+	
+	// assign
+	CensusList<Type> & operator = (const CensusList<Type> & other)
+	{
+		if (this != &other)
+		{
+			this->indexed = other.indexed;
+			this->index = other.index;
+			this->type_ = other.type_;
+			this->census_ = other.census_;
+			this->n = other.n;
+		}
+		return *this;
+	}
+	
+	CensusList<Type> & operator = (CensusList<Type> && other)
+	{
+		if (this != &other)
+		{
+			this->indexed = other.indexed;
+			this->index = std::move(other.index);
+			this->type_ = std::move(other.type_);
+			this->census_ = std::move(other.census_);
+			this->n = other.n;
+		}
+		return *this;
+	}
+	
+	// construct
+	CensusList()
+	: n(0)
+	{}
+	
+	CensusList(const CensusList<Type> & other)
+	: indexed(other.indexed)
+	, index(other.index)
+	, type_(other.type_)
+	, census_(other.census_)
+	, n(other.n)
+	{}
+	
+	CensusList(CensusList<Type> && other)
+	: indexed(other.indexed)
+	, index(std::move(other.index))
+	, type_(std::move(other.type_))
+	, census_(std::move(other.census_))
+	, n(other.n)
+	{}
 };
 
 

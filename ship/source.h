@@ -19,6 +19,9 @@
 #include "sample.h"
 
 
+#define DEBUG_SOURCE
+
+
 //******************************************************************************
 // Marker & sample (data matrix) container
 //******************************************************************************
@@ -26,31 +29,35 @@ class Source
 {
 private:
 	
-	unsigned long marker_size_; // number of markers
-	unsigned long sample_size_; // number of samples
-	std::vector<Marker> marker_; // list of markers
+	Chromosome chromosome; // chromosome of source
 	std::vector<Sample> sample_; // list of samples & data
+	std::vector<Marker> marker_; // list of markers
+	size_t sample_size_; // number of samples
+	size_t marker_size_; // number of markers
+	bool finished; // flag that appending was finished
 	
 	// sort data matrix
 	void sort();
-	
-	bool good; // flag that markers were sorted, no new markers/samples can be added
 	
 public:
 	
 	void finish(); // finish by sorting markers
 	
 	// return marker/sample size
-	unsigned long marker_size() const;
-	unsigned long sample_size() const;
+	size_t sample_size() const;
+	size_t marker_size() const;
 	
-	// return marker/sample data
-	const Marker & marker(const unsigned long) const;
-	const Sample & sample(const unsigned long) const;
+	// return marker/sample reference
+	const Sample & sample(const size_t) const;
+	const Marker & marker(const size_t) const;
+	
+	// return marker/sample vector reference
+	const std::vector<Sample> & sample() const;
+	const std::vector<Marker> & marker() const;
 	
 	// append marker/sample
-	void append(Marker &&); // move
 	void append(Sample &&); // move
+	void append(Marker &&); // move
 	
 	// assign
 	Source & operator = (const Source &);

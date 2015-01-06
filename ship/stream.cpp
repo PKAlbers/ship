@@ -9,25 +9,30 @@
 #include "stream.h"
 
 
-#define BUFFER_SIZE_LINE  33554432 // 32 Mb
+#define DEBUG_STREAM
 
 
 //******************************************************************************
-// Reading files by line
+// Stream file by lines
 //******************************************************************************
 
-//
-// Stream file lines
-//
+#define READ_BUFFER_SIZE 33554431 // 32 Mb - 1 byte
 
 StreamLine::StreamLine()
-: good_(false)
-, count(0)
+: opened(false)
+, n_line(0)
+, length(std::min(INT_MAX, READ_BUFFER_SIZE))
+, buffer(std::min(INT_MAX, READ_BUFFER_SIZE) + 1)
+, bufptr(&buffer[0])
+, bufend(NULL)
+, cache(1)
+, use(cache.cbegin())
+, end(cache.cend())
+, eof(false)
 {}
 
 StreamLine::StreamLine(const std::string & filename)
-: good_(false)
-, count(0)
+: StreamLine()
 {
 	this->open(filename);
 }
@@ -37,450 +42,521 @@ StreamLine::~StreamLine()
 	this->close();
 }
 
-void StreamLine::compressed(const std::string & filename)
+void StreamLine::gzip()
 {
 	int c0, c1;
 	
-	FILE * file = fopen(filename.c_str(), "rb");
+	FILE * file = fopen(this->file.c_str(), "rb");
 	if (file == NULL)
-		throw std::runtime_error("Cannot open file: " + filename);
+		throw std::runtime_error("Cannot open file: " + this->file);
 	
 	c0 = fgetc(file);
 	c1 = fgetc(file);
 	
 	if (feof(file) || ferror(file))
-		throw std::runtime_error("Cannot read file: " + filename);
+		throw std::runtime_error("Cannot read file: " + this->file);
 	
 	// magic number
-	this->compressed_ = (c0 == 0x1f && c1 == 0x8b) ? true : false;
+	this->cmpr = (c0 == 0x1f && c1 == 0x8b);
 	
 	fclose(file);
 }
 
-bool StreamLine::chunk()
+bool StreamLine::read()
 {
-	this->buff[0] = '\0'; // reset buffer
-	
-	if (this->compressed_)
+	if (this->eof)
 	{
-		if (gzgets(this->file_gzip_stream, this->buff, INT_MAX) == NULL)
-		{
-			if (gzeof(this->file_gzip_stream))
-				return false;
-			
-			throw std::runtime_error("Failed to read line from compressed file: " + this->name);
-		}
+		return false;
+	}
+	
+	int n = 0;
+	const size_t size = strlen(this->bufptr);
+	
+	// copy overhang to front of buffer
+	if (size > 0 && this->bufptr != &this->buffer[0])
+	{
+		memmove(&this->buffer[0], this->bufptr, size);
+	}
+	
+	// increase buffer size to fit overhang and next read
+	if (size + this->length > this->buffer.size() - 1)
+	{
+		this->buffer.resize(size + this->length + 1);
+	}
+	
+	this->bufptr = &this->buffer[size];
+	*this->bufptr = '\0';
+	
+	if (this->cmpr)
+	{
+		// read from gzip
+		n = gzread(this->stream.gz, this->bufptr, this->length);
 	}
 	else
 	{
-		if (fgets(this->buff, INT_MAX, this->file_text_stream) == NULL)
+		// read from file
+		n = (int)fread(this->bufptr, sizeof(this->buffer[0]), this->length, this->stream.fp);
+	}
+	
+	// handle end of file
+	if (n < 1)
+	{
+		if (strlen(&this->buffer[0]) > 0)
 		{
-			if (feof(this->file_text_stream))
-				return false;
-			
-			throw std::runtime_error("Failed to read line from file: " + this->name);
+			this->cache.push_back(&this->buffer[0]);
 		}
+		
+		this->eof = true;
+		
+		return false;
+	}
+	
+	*(this->bufptr + n) = '\0'; // terminate read
+	
+	this->bufptr = &this->buffer[0];
+	this->bufend = strchr(this->bufptr, '\n'); // detect newline
+	
+	// walkabout buffer
+	while (this->bufend != NULL)
+	{
+		this->cache.push_back(this->bufptr);
+		
+		*this->bufend = '\0'; // replace newline
+		
+		this->bufptr = this->bufend + 1;
+		this->bufend = strchr(this->bufptr, '\n'); // detect newline
 	}
 	
 	return true;
+}
+
+StreamLine::operator char * () const
+{
+#ifdef DEBUG_STREAM
+	if (! this->opened)
+	{
+		throw std::runtime_error("Read stream not open");
+	}
+#endif
+	
+	return *this->use;
+}
+
+std::string StreamLine::str() const
+{
+#ifdef DEBUG_STREAM
+	if (! this->opened)
+	{
+		throw std::runtime_error("Read stream not open");
+	}
+#endif
+	
+	return std::string(*this->use);
+}
+
+size_t StreamLine::count() const
+{
+#ifdef DEBUG_STREAM
+	if (! this->opened)
+	{
+		throw std::runtime_error("Read stream not open");
+	}
+#endif
+	
+	return this->n_line;
+}
+
+std::string StreamLine::source() const
+{
+#ifdef DEBUG_STREAM
+	if (! this->opened)
+	{
+		throw std::runtime_error("Read stream not open");
+	}
+#endif
+	
+	return this->file;
 }
 
 void StreamLine::open(const std::string & filename)
 {
-	if (this->good_) return;
-	
-	this->name  = filename;
-	this->good_ = true;
-	
-	// allocate line and buffer size
-	try
+#ifdef DEBUG_STREAM
+	if (this->opened)
 	{
-		this->line = new char[BUFFER_SIZE_LINE];
-		this->buff = new char[INT_MAX];
+		throw std::runtime_error("Read stream already open");
 	}
-	catch (std::bad_alloc &)
-	{
-		throw std::runtime_error("Cannot allocate memory");
-	}
+#endif
+	
+	this->file = filename;
 	
 	// determine file type (text or compressed/binary)
-	this->compressed(filename);
+	this->gzip();
 	
 	// open file
-	if (this->compressed_)
+	if (this->cmpr)
 	{
-		if ((this->file_gzip_stream = gzopen(filename.c_str(), "rb")) == NULL)
-			throw std::runtime_error("Cannot open compressed input file: " + this->name);
+		if ((this->stream.gz = gzopen(this->file.c_str(), "rb")) == NULL)
+			throw std::runtime_error("Cannot open compressed file: " + this->file);
 	}
 	else
 	{
-		if ((this->file_text_stream = fopen(filename.c_str(), "r")) == NULL)
-			throw std::runtime_error("Cannot open input file: " + this->name);
+		if ((this->stream.fp = fopen(this->file.c_str(), "r")) == NULL)
+			throw std::runtime_error("Cannot open file: " + this->file);
 	}
-}
-
-bool StreamLine::is_open() const
-{
-	return this->good_;
+	
+	this->opened = true;
 }
 
 void StreamLine::close()
 {
-	if (this->good_)
+	if (this->opened)
 	{
-		delete [] this->line;
-		delete [] this->buff;
-		
-		if (this->compressed_)
-			gzclose(this->file_gzip_stream);
+		if (this->cmpr)
+			gzclose(this->stream.gz);
 		else
-			fclose(this->file_text_stream);
+			fclose(this->stream.fp);
 		
-		this->good_ = false;
+		this->opened = false;
 	}
-}
-
-bool StreamLine::read()
-{
-	if (! this->good_) return false;
 	
-	if ((this->compressed_ && gzeof(this->file_gzip_stream)) ||
-		(!this->compressed_ && feof(this->file_text_stream)))
-		return false;
-	
-	this->line[0] = '\0'; // reset line
-	
-	do
-	{
-		if (! this->chunk()) // read chunk from file
-			break;
-		
-		strcat(this->line, this->buff); // append chunk to line
-	}
-	while (this->buff[ (strlen(this->buff) - 1) ] != '\n');
-	// read chunks until newline encountered
-	
-	if (this->line[0] == '\0')
-		return false;
-	
-	// remove trailing newline char
-	size_t len = strlen(this->line) - 1;
-	if (this->line[len] == '\n')
-		this->line[len] =  '\0';
-	
-	++this->count;
-	
-	return true;
+	this->buffer.clear();
+	this->cache.clear();
+	this->use = this->cache.cend();
+	this->end = this->cache.cend();
 }
 
 void StreamLine::reset()
 {
-	if (! this->good_) return;
-	
-	if (this->compressed_)
+#ifdef DEBUG_STREAM
+	if (! this->opened)
 	{
-		if (gzrewind(this->file_gzip_stream) != 0)
-			throw std::runtime_error("Exception while handling compressed file: " + this->name);
+		throw std::runtime_error("Read stream not open");
+	}
+#endif
+	
+	if (this->cmpr)
+	{
+		if (gzrewind(this->stream.gz) != 0)
+			throw std::runtime_error("Exception while handling compressed file: " + this->file);
 	}
 	else
 	{
-		if (fseek(this->file_text_stream, 0, SEEK_SET) != 0)
-			throw std::runtime_error("Exception while handling file: " + this->name);
+		if (fseek(this->stream.fp, 0, SEEK_SET) != 0)
+			throw std::runtime_error("Exception while handling file: " + this->file);
 	}
 	
-	this->count = 0;
+	this->n_line = 0;
+	this->cache = std::vector<char*>(1);
+	this->use = this->cache.cbegin();
+	this->end = this->cache.cend();
 }
 
-unsigned long StreamLine::count_lines()
+bool StreamLine::next()
 {
-	if (! this->good_) return 0;
-	
-	unsigned long n = 0;
-	bool flag;
-	
-	if ((this->compressed_ && gzeof(this->file_gzip_stream)) ||
-		(!this->compressed_ && feof(this->file_text_stream)))
-		this->reset();
-	
-	while (true)
+#ifdef DEBUG_STREAM
+	if (! this->opened)
 	{
-		flag = false;
+		throw std::runtime_error("Read stream not open");
+	}
+#endif
+	
+	++this->use;
+	
+	if (this->use == this->end)
+	{
+		this->cache.clear();
 		
-		if ((this->compressed_ && gzeof(this->file_gzip_stream)) ||
-			(!this->compressed_ && feof(this->file_text_stream)))
-			break;
-		
-		do
+		while (this->read())
 		{
-			if (! this->chunk()) // read chunk from file
+			if (this->cache.size() > 0)
+			{
+				this->use = this->cache.cbegin();
+				this->end = this->cache.cend();
+				
 				break;
-			
-			flag = true; // indicate that line was read
-		}
-		while (this->buff[ (strlen(this->buff) - 1) ] != '\n');
-		// read chunks until newline encountered
-		
-		if (flag)
-			++n;
-	}
-	
-	this->reset();
-	
-	return n;
-}
-
-unsigned long StreamLine::count_fields()
-{
-	if (! this->good_) return 0;
-	
-	unsigned long n = 0;
-	std::string tok;
-	
-	if (!this->read())
-	{
-		throw std::runtime_error("Cannot read next line in input file");
-	}
-		
-	std::istringstream raw(this->line);
-	
-	while(raw >> tok)
-		++n;
-	
-	this->reset();
-	
-	return n;
-}
-
-std::string StreamLine::error(const std::string msg, const bool _name, const bool _count, const bool _line) const
-{
-	std::ostringstream oss;
-	oss << msg << std::endl;
-	if (_name)  oss << std::endl << "File: " << this->name;
-	if (_count) oss << std::endl << "Line: " << this->count;
-	if (_line)  oss << std::endl << ">> " << this->line << " <<";
-	return oss.str();
-}
-
-
-//
-// Parse line into tokens
-//
-
-
-ParseLine::ParseLine(const char * _line)
-: l(_line)
-, i(0)
-, n(4096) // inital size for token char array
-, sep('\0')
-, sep_(false)
-, count(0)
-{
-	this->token = new char[this->n];
-}
-
-ParseLine::ParseLine(const char * _line, const char _sep)
-: l(_line)
-, i(0)
-, n(4096) // inital size for token char array
-, sep(_sep)
-, sep_(true)
-, count(0)
-{
-	this->token = new char[this->n];
-}
-
-ParseLine::~ParseLine()
-{
-	delete [] this->token;
-}
-
-bool ParseLine::next()
-{
-	char c = this->l[this->i];
-	bool b = false;
-	
-	// reset token
-	this->token[0] = '\0';
-	this->width = 0;
-	
-	while (c != '\n' && c != '\0') // is not at end
-	{
-		if (c > ' ' && (!this->sep_ || (this->sep_ && c != this->sep))) // is printable, and not a seperator
-		{
-			if (!b)
-			{
-				b = true;
-			}
-			
-			this->token[ this->width ] = c; // insert char
-			++this->width; // count token chars
-			
-			// increase max size of char array
-			if (this->width == this->n)
-			{
-				this->n += 4096; // increase size
-				
-				char * temp = new char[this->n]; // make new temp token
-				strcpy(temp, this->token); // copy to temp token
-				delete [] this->token; // delete token
-				
-				this->token = new char[this->n]; // make new token
-				strcpy(this->token, temp); // copy to token
-				delete [] temp; // delete temp token
-			}
-		}
-		else if (b)
-		{
-			++this->i;
-			break; // break loop after token was extracted
-		}
-		
-		c = this->l[ (++this->i) ];
-	}
-	
-	if (b)
-	{
-		this->token[ this->width ] = '\0'; // terminate token
-		this->count += 1; // count token
-		
-		return true;
-	}
-	
-	return false;
-}
-
-bool ParseLine::is_numeric() const
-{
-	if (this->width > 1)
-	{
-		bool neg = false;
-		
-		for (size_t k = 0; k < this->width; ++k)
-		{
-			const char c = this->token[k];
-			
-			if (c < '0' || c > '9')
-			{
-				if (c == '-' && k == 0)
-				{
-					neg = true;
-					continue;
-				}
-				
-				if (c == '.' && (!neg && (k == 0 || k == 1)))
-					continue;
-				
-				if (c == '.' && (neg && (k == 1 || k == 2)))
-					continue;
-				
-				return false;
 			}
 		}
 		
-		return true;
+		if (this->cache.size() > 0)
+		{
+			this->use = this->cache.cbegin();
+			this->end = this->cache.cend();
+		}
+		else
+		{
+			return false;
+		}
 	}
 	
-	return false;
+	++this->n_line;
+	
+	return true;
 }
 
-template<>
-ParseLine::operator char () const
+
+
+//******************************************************************************
+// Split line into tokens
+//******************************************************************************
+StreamSplit::StreamSplit(char * _use, const char * _del)
+: del(strlen(_del) + 1)
+, ptr(_use)
+, beg(_use)
+, end(NULL)
+, n(0)
 {
-	if (this->width == 1)
-	{
-		return this->token[0];
-	}
-	
-	throw std::domain_error("Parsed token is a string: " + std::string(this->token));
+	strcpy(&this->del[0], _del);
 }
 
-template<>
-ParseLine::operator unsigned char () const
+StreamSplit::StreamSplit(std::string & _use, const char * _del)
+: del(strlen(_del) + 1)
+, ptr(&_use[0])
+, beg(&_use[0])
+, end(NULL)
+, n(0)
 {
-	if (this->width == 1)
-	{
-		return static_cast<unsigned char>( this->token[0] );
-	}
-	
-	throw std::domain_error("Parsed token is a string: " + std::string(this->token));
+	strcpy(&this->del[0], _del);
 }
 
-template<>
-ParseLine::operator bool () const
+bool StreamSplit::next()
 {
-	if (this->width == 1)
+	// skip leading delimiters
+	if (this->beg != NULL)
 	{
-		return static_cast<bool>( this->token[0] );
+		while (*this->beg != '\0' && strchr(&this->del[0], *this->beg) != NULL)
+		{
+			++this->beg;
+		}
+		
+		if (*this->beg == '\0')
+		{
+			return false;
+		}
 	}
 	
-	throw std::domain_error("Parsed token is not boolean: " + std::string(this->token));
+	if (this->beg == NULL)
+	{
+		return false;
+	}
+	
+	this->ptr = this->beg; // point to begin
+	
+	this->end = strpbrk(this->beg, &this->del[0]); // detect delimiter
+	
+	if (this->end != NULL)
+	{
+		*this->end = '\0'; // terminate token
+		
+		this->beg = this->end + 1; // set begin
+	}
+	else
+	{
+		this->beg = NULL; // indicate exit
+	}
+	
+	++this->n; // count token
+	
+	return true;
 }
 
-template<>
-ParseLine::operator int () const
+StreamSplit::operator char * () const
 {
-	if (this->is_numeric())
-	{
-		return atoi(this->token);
-	}
-	
-	throw std::domain_error("Parsed token is not numeric: " + std::string(this->token));
+	return this->ptr;
 }
 
-template<>
-ParseLine::operator unsigned int () const
+bool StreamSplit::convert(int & i)
 {
-	if (this->is_numeric())
+	char * p = this->ptr;
+	
+	if (*p == '\0')
+		return false;
+	
+	// accept leading minus
+	if (*p == '-')
 	{
-		return static_cast<unsigned int>( atoi(this->token) );
+		++p;
+		
+		if (*p == '\0')
+			return false;
 	}
 	
-	throw std::domain_error("Parsed token is not numeric: " + std::string(this->token));
+	while (*p != '\0')
+	{
+		if (*p < '0' || *p > '9')
+			return false;
+		
+		++p;
+	}
+	
+	i = atoi(this->ptr);
+	
+	return true;
 }
 
-template<>
-ParseLine::operator long () const
+bool StreamSplit::convert(size_t & i)
 {
-	if (this->is_numeric())
+	char * p = this->ptr;
+	
+	if (*p == '\0')
+		return false;
+	
+	while (*p != '\0')
 	{
-		return atol(this->token);
+		if (*p < '0' || *p > '9')
+			return false;
+		
+		++p;
 	}
 	
-	throw std::domain_error("Parsed token is not numeric: " + std::string(this->token));
+	i = (size_t)atol(this->ptr);
+	
+	return true;
 }
 
-template<>
-ParseLine::operator unsigned long () const
+bool StreamSplit::convert(double & f)
 {
-	if (this->is_numeric())
+	char * p = this->ptr;
+	
+	if (*p == '\0')
+		return false;
+	
+	// accept leading minus
+	if (*p == '-')
 	{
-		return static_cast<unsigned long>( atol(this->token) );
+		++p;
+		
+		if (*p == '\0')
+			return false;
 	}
 	
-	throw std::domain_error("Parsed token is not numeric: " + std::string(this->token));
+	while (*p != '\0')
+	{
+		if ((*p < '0' || *p > '9') && *p != '.')
+			return false;
+		
+		++p;
+	}
+	
+	f = atof(this->ptr);
+	
+	return true;
 }
 
-template<>
-ParseLine::operator double () const
+std::string StreamSplit::str() const
 {
-	if (this->is_numeric())
-	{
-		return atof(this->token);
-	}
-	
-	throw std::domain_error("Parsed token is not numeric: " + std::string(this->token));
+	return std::string(this->ptr);
 }
 
-template<>
-ParseLine::operator float () const
+size_t StreamSplit::count() const
 {
-	if (this->is_numeric())
-	{
-		return static_cast<float>( atof(this->token) );
-	}
-	
-	throw std::domain_error("Parsed token is not numeric: " + std::string(this->token));
+	return this->n;
 }
 
+size_t StreamSplit::size() const
+{
+	return strlen(this->ptr);
+}
+
+const char * StreamSplit::def = " \t"; // whitespace
+
+
+
+//******************************************************************************
+// Write to file
+//******************************************************************************
+
+StreamOut::StreamOut()
+: fp(nullptr)
+, good(false)
+{}
+
+StreamOut::StreamOut(const std::string & filename)
+: good(true)
+, name(filename)
+{
+	if ((this->fp = fopen(filename.c_str(), "w")) == NULL)
+	{
+		throw std::runtime_error("Cannot create output file: " + this->name);
+	}
+}
+
+StreamOut::~StreamOut()
+{
+	this->close();
+}
+
+void StreamOut::open(const std::string & filename)
+{
+#ifdef DEBUG_STREAM
+	if (this->good)
+	{
+		throw std::runtime_error("Write stream already open");
+	}
+#endif
+	
+	if ((this->fp = fopen(filename.c_str(), "w")) == NULL)
+	{
+		throw std::runtime_error("Cannot create output file: " + this->name);
+	}
+	
+	this->name = filename;
+	this->good = true;
+}
+
+void StreamOut::close()
+{
+	if (this->good)
+		fclose(this->fp);
+}
+
+StreamOut::operator FILE * () const
+{
+#ifdef DEBUG_STREAM
+	if (! this->good)
+	{
+		throw std::runtime_error("Write stream not open");
+	}
+#endif
+	
+	return this->fp;
+}
+
+void StreamOut::line(const std::string & str, const char last) const
+{
+#ifdef DEBUG_STREAM
+	if (! this->good)
+	{
+		throw std::runtime_error("Write stream not open");
+	}
+#endif
+	
+	fprintf(this->fp, "%s%c", str.c_str(), last);
+}
+
+
+
+//******************************************************************************
+// Redirect log & err streams
+//******************************************************************************
+
+StreamLogErr::StreamLogErr(const std::string & prefix)
+: flog(prefix + ".log")
+, ferr(prefix + ".err")
+{
+	this->clog = std::clog.rdbuf();
+	this->cerr = std::cerr.rdbuf();
+	
+	std::clog.rdbuf(this->flog.rdbuf());
+	std::cerr.rdbuf(this->ferr.rdbuf());
+}
+
+StreamLogErr::~StreamLogErr()
+{
+	std::clog.rdbuf(this->clog);
+	std::cerr.rdbuf(this->cerr);
+	
+	this->flog.close();
+	this->ferr.close();
+}
 
 

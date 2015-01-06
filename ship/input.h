@@ -2,7 +2,7 @@
 //  input.h
 //  ship
 //
-//  Created by Patrick Albers on 21.11.2014.
+//  Created by Patrick Albers on 13.12.2014.
 //  Copyright (c) 2014 Patrick K. Albers. All rights reserved.
 //
 
@@ -11,15 +11,18 @@
 
 #include <stdio.h>
 #include <time.h>
+#include <fstream>
+#include <sstream>
 #include <string>
 #include <vector>
 #include <set>
+#include <unordered_set>
 #include <deque>
 #include <algorithm>
 #include <stdexcept>
 
-#include "parse.h"
 #include "timer.h"
+#include "stream.h"
 #include "census.h"
 #include "sample.h"
 #include "marker.h"
@@ -32,139 +35,170 @@
 //******************************************************************************
 
 //
-// Filter input before putting in source
+// Filter input before sourcing
 //
-struct FilterInput
+class FilterInput
 {
-	struct FilterMarkerInfo
+private:
+	
+	class FilterMarkerInfo
 	{
-		bool remove_if_contains_indel;
-		bool remove_if_contains_other;
-		bool remove_if_multiallelic;
+	private:
+		
+		bool any;
+		bool remove_if_contains_snp_;
+		bool remove_if_contains_indel_;
+		bool remove_if_contains_other_;
+		bool remove_if_biallelic_;
+		bool remove_if_multiallelic_;
+		bool remove_pos_;
+		
+		std::unordered_set<size_t> remove_pos_set;
+		
+	public:
+		
+		// set filters
+		void remove_if_contains_snp();
+		void remove_if_contains_indel();
+		void remove_if_contains_other();
+		void remove_if_biallelic();
+		void remove_if_multiallelic();
+		void remove_pos(const std::string &);
 		
 		FilterMarkerInfo();
+		friend class FilterInput;
 	};
 	
-	struct FilterMarkerData
+	class FilterMarkerData
 	{
-		bool remove_if_unphased;
-		bool remove_if_unknown;
+	private:
+		
+		bool any;
+		bool remove_if_contains_unknown_;
+		
+	public:
+		
+		// set filters
+		void remove_if_contains_unknown();
 		
 		FilterMarkerData();
+		friend class FilterInput;
 	};
 	
-	struct FilterMarkerStat
+	class FilterMarkerStat
 	{
+	private:
+		
 		bool any;
 		bool remove_hap_below_;
 		bool remove_hap_above_;
 		bool remove_gen_below_;
 		bool remove_gen_above_;
 		
-		Census remove_hap_below; // equal or lower
-		Census remove_hap_above; // equal or greater
-		Census remove_gen_below; // equal or lower
-		Census remove_gen_above; // equal or greater
+		Cutoff remove_hap_below_cutoff; // equal or lower
+		Cutoff remove_hap_above_cutoff; // equal or greater
+		Cutoff remove_gen_below_cutoff; // equal or lower
+		Cutoff remove_gen_above_cutoff; // equal or greater
+		
+	public:
+		
+		// set filters
+		void remove_hap_below(const std::string &, const size_t);
+		void remove_hap_above(const std::string &, const size_t);
+		void remove_gen_below(const std::string &, const size_t);
+		void remove_gen_above(const std::string &, const size_t);
 		
 		FilterMarkerStat();
+		friend class FilterInput;
 	};
+	
+	class FilterMarkerGmap
+	{
+	private:
+		
+		bool any;
+		bool remove_if_source_interpolated_;
+		bool remove_if_source_extrapolated_;
+		bool remove_if_source_unknown_;
+		
+	public:
+		
+		// set filters
+		void remove_if_source_interpolated();
+		void remove_if_source_extrapolated();
+		void remove_if_source_unknown();
+		
+		FilterMarkerGmap();
+		friend class FilterInput;
+	};
+	
+	class FilterSampleInfo
+	{
+	private:
+		
+		bool any;
+		bool remove_key_;
+		
+		std::unordered_set<std::string> remove_key_set;
+		
+	public:
+		
+		// set filters
+		void remove_key(const std::string &);
+		
+		FilterSampleInfo();
+		friend class FilterInput;
+	};
+	
+public:
 	
 	FilterMarkerInfo markerinfo;
 	FilterMarkerData markerdata;
 	FilterMarkerStat markerstat;
+	FilterMarkerGmap markergmap;
+	FilterSampleInfo sampleinfo;
+	
+	std::string comment; // leave explanation when declinded
 	
 	// apply filters
-	bool apply(const MarkerInfo &, const unsigned long) const;
-	bool apply(const MarkerData &, const unsigned long) const;
-	bool apply(const MarkerStat &, const unsigned long) const;
+	bool apply(const MarkerInfo &);
+	bool apply(const MarkerData &);
+	bool apply(const MarkerStat &);
+	bool apply(const MarkerGmap &);
+	bool apply(const SampleInfo &);
 };
 
 
 //
-// Scan input file format
+// Load input and other files
 //
-class ScanInput : public ReadStream
+class Input_VCF
 {
 private:
 	
-	// scan for each defined format
-	bool scan_format_vcf();
-	bool scan_format_hap();
-	bool scan_format_gen();
+	StreamLine line; // input file stream
+	size_t size; // detected sample size
+	
+	bool sample_; // flag that sample file was provided (optional)
+	bool genmap_; // flag that genetic map file was provided (optional)
+	
+	std::vector<SampleInfo> _sample; // sample information
+	Genmap                  _genmap; // genetic map container
+	
+	void log(const std::string &); // log warning message
+	std::string error(const std::string &); // error message when throwing
 	
 public:
 	
-	InputFormat format; // detected input format
-	unsigned long header_rows; // number of header lines
-	unsigned long marker_cols; // number of marker columns
-	unsigned long sample_cols; // number of sample columns (not sample size)
+	FilterInput filter;
 	
-	// construct
-	ScanInput(const std::string &, const InputFormat);
-};
-
-
-//
-// Load input files into source
-//
-class LoadInput
-{
-private:
-	
-	// sample cache
-	struct SampleCache
-	{
-		std::vector<SampleInfo> cache; // parsed samples from each line
-	};
-	
-	// legend cache
-	struct LegendCache
-	{
-		std::deque<MarkerInfo> cache; // parsed markers from each line
-		std::deque<char> valid; // flag that markers are valid
-	};
-	
-	// genmap cache
-	struct GenmapCache
-	{
-		Genmap cache; // genetic map container
-	};
-	
-	
-	ReadInput input; // input file stream
-	FilterInput filter; // input filter
-	
-	SampleCache _sample; // sample container
-	LegendCache _legend; // legend container
-	GenmapCache _genmap; // genmap container
-	
-	bool sample_; // flag that sample file was provided
-	bool legend_; // flag that legend file was provided
-	bool genmap_; // flag that genmap file was provided
-	
-	unsigned long size; // scanned sample size
-	
-	// handle missing sample
-	std::vector<SampleInfo> get_sample_vcf() const;
-	std::vector<SampleInfo> get_sample_hap() const;
-	std::vector<SampleInfo> get_sample_gen() const;
-	std::vector<SampleInfo> make_sample() const; // generate sample IDs
-	
-public:
-	
-	// provide additional files
 	void sample(const std::string &);
-	void legend(const std::string &);
 	void genmap(const std::string &);
 	
-	// load source
-	void load(Source &);
+	void run(Source &);
 	
-	// construct/destruct
-	LoadInput(const ScanInput &, const FilterInput &);
-	//~LoadInput();
+	Input_VCF(const std::string &);
 };
-
 
 
 

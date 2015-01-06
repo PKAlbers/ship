@@ -9,7 +9,6 @@
 #include "allele.h"
 
 
-
 //******************************************************************************
 // Allele container
 //******************************************************************************
@@ -195,6 +194,7 @@ void AlleleList::append(const Allele & allele)
 		this->contains_other_ = allele.type(AlleleType::OTHER);
 	
 	this->list_.push_back(allele);
+	this->size_ += 1;
 }
 
 void AlleleList::append(Allele && allele)
@@ -209,87 +209,88 @@ void AlleleList::append(Allele && allele)
 		this->contains_other_ = allele.type(AlleleType::OTHER);
 	
 	this->list_.push_back(std::move(allele));
+	this->size_ += 1;
 }
 
 const Allele & AlleleList::operator [] (const int i) const
 {
-    if (i < 0 || i >= this->size_)
-    {
-        throw std::out_of_range("No allele defined for '" + std::to_string(i) + "'");
-    }
-    
-    return this->list_[i];
+	if (i < 0 || i >= this->size_)
+	{
+		throw std::out_of_range("No allele defined for '" + std::to_string(i) + "'");
+	}
+	
+	return this->list_[i];
 }
 
-bool AlleleList::operator () (const int i) const
+bool AlleleList::exists(const int i) const
 {
-	return (i < 0 || i >= this->size_);
+	return (i > -1 && i < this->size_);
 }
 
 bool AlleleList::contains_snp() const
 {
-    return this->contains_snp_;
+	return this->contains_snp_;
 }
 
 bool AlleleList::contains_indel() const
 {
-    return this->contains_indel_;
+	return this->contains_indel_;
 }
 
 bool AlleleList::contains_other() const
 {
-    return this->contains_other_;
+	return this->contains_other_;
 }
 
 int AlleleList::size() const
 {
-    return this->size_;
+	return this->size_;
 }
 
 void AlleleList::print(std::ostream & stream, const char last) const
 {
-    if (this->size_ == 0)
-    {
-        stream << '.';
-    }
-    else
-    {
-        char sep = NULL;
-        for (int i = 0; i < this->size_; ++i)
-        {
-            stream << sep << i << ':' << this->list_[i].base();
-            sep = ',';
-        }
-    }
-    if (last != '\0')
-        stream << last;
+	if (this->size_ == 0)
+	{
+		stream << '.';
+	}
+	else
+	{
+		char sep = NULL;
+		for (int i = 0; i < this->size_; ++i)
+		{
+			stream << sep << i << ':' << this->list_[i].base();
+			sep = ',';
+		}
+	}
+	if (last != '\0')
+		stream << last;
 }
 
 void AlleleList::print(FILE * fp, const char last) const
 {
-    if (this->size_ == 0)
-    {
-        fprintf(fp, ".");
-    }
-    else
-    {
-        char sep = NULL;
-        for (int i = 0; i < this->size_; ++i)
-        {
-            fprintf(fp, "%c%d:%s", sep, i, this->list_[i].base().c_str());
-            sep = ',';
-        }
-    }
-    if (last != '\0')
-        fprintf(fp, "%c", last);
+	if (this->size_ == 0)
+	{
+		fprintf(fp, ".");
+	}
+	else
+	{
+		fprintf(fp, "%d:%s", 0, this->list_[0].base().c_str());
+		
+		for (int i = 1; i < this->size_; ++i)
+		{
+			fprintf(fp, ",%d:%s", i, this->list_[i].base().c_str());
+		}
+	}
+	if (last != '\0')
+		fprintf(fp, "%c", last);
 }
 
 
 std::string AlleleList::str() const
 {
-    std::ostringstream oss;
-    this->print(oss);
-    return oss.str();
+	std::ostringstream oss;
+	this->print(oss);
+	return oss.str();
 }
 
 
