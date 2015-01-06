@@ -120,7 +120,7 @@ class CommandLine
 private:
 	
 	const std::string _path; // execution path
-	const std::vector<std::string> _line; // exection line
+	const std::vector<std::string> _line; // parsed command line
 	bool parsed; // flag that command line was parsed
 	
 	CommandUnit _par; // input parameters without specifiers

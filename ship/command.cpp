@@ -417,9 +417,9 @@ void CommandLine::help()
 	
 	std::cout << " <ARGUMENT> ";
 	
-	std::cout << " -[OPTION ... ] ";
+	std::cout << " -[OPTION <PARAMETERS> ] ";
 	
-	std::cout << " --[OTHER ... ] ";
+	std::cout << " --[OTHER <PARAMETERS> ] ";
 	
 	std::cout << std::endl << std::endl;
 	

@@ -203,7 +203,7 @@ int main(int argc, const char * argv[])
 	//
 	std::cout << "Identifying rare alleles" << std::endl;
 	RareHaplotype rare(source, cutoff);
-	std::cout << "Identified alleles: " << rare.n_allele << " (in " << rare.n_marker << " markers)" << std::endl;
+	std::cout << "Identified rare alleles: " << rare.n_allele << " (in " << rare.n_marker << " markers)" << std::endl;
 	
 	std::cout << std::endl << "Done!" << std::endl << runtime.str() << std::endl;
 	
