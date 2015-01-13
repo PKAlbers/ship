@@ -19,6 +19,28 @@
 
 
 
+
+struct Rare
+{
+	const Marker * marker;
+	const Haplotype h;
+};
+
+
+struct RareHaplotype
+{
+	std::vector< std::pair<const Marker *, Haplotype> > list;
+	size_t n_marker, n_allele;
+	
+	// construct
+	RareHaplotype(const Source &, const Census &);
+};
+
+
+
+
+
+
 struct SharedHaplotype
 {
 	const Haplotype allele;
@@ -49,14 +71,7 @@ public:
 
 
 
-struct RareHaplotype
-{
-	std::vector< std::pair<const Marker *, Haplotype> > list;
-	size_t n_marker, n_allele;
-	
-	// construct
-	RareHaplotype(const Source &, const Census &);
-};
+
 
 
 

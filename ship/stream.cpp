@@ -186,7 +186,7 @@ void StreamLine::open(const std::string & filename)
 		throw std::runtime_error("Read stream already open");
 	}
 #endif
-	
+
 	this->file = filename;
 	
 	// determine file type (text or compressed/binary)
@@ -531,6 +531,11 @@ void StreamOut::line(const std::string & str, const char last) const
 #endif
 	
 	fprintf(this->fp, "%s%c", str.c_str(), last);
+}
+
+void StreamOut::endl()
+{
+	fputc('\n', this->fp);
 }
 
 

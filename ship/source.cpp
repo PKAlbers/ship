@@ -52,6 +52,7 @@ Source & Source::operator = (const Source & other)
 		this->marker_size_ = other.marker_size_;
 		this->finished = other.finished;
 	}
+	
 	return *this;
 }
 
@@ -65,6 +66,7 @@ Source & Source::operator = (Source && other)
 		this->marker_size_ = other.marker_size_;
 		this->finished = other.finished;
 	}
+	
 	return *this;
 }
 
@@ -117,7 +119,7 @@ void Source::append(Marker && marker)
 		this->sample_[i].data.append(marker.data[i]);
 	}
 	
-	// clear marker data
+	// remove marker data
 	marker.data.remove();
 	
 	// append marker
@@ -187,7 +189,7 @@ size_t Source::marker_size() const
 	return this->marker_size_;
 }
 
-void Source::finish()
+void Source::finish(const int threads)
 {
 #ifdef DEBUG_SOURCE
 	if (this->finished)
@@ -212,12 +214,31 @@ void Source::finish()
 	}
 	
 	// sort marker data
-	this->sort();
+	this->sort(threads);
 	
 	this->finished = true;
 }
 
-void Source::sort()
+void sort_subsample(const std::vector<std::vector<Sample>::iterator> & subsample, const std::vector<size_t> & order)
+{
+	const size_t n_subsample = subsample.size();
+	const size_t n_order     = order.size();
+	
+	for (size_t i = 0; i < n_subsample; ++i)
+	{
+		SampleData data;
+		
+		for (size_t k = 0; k < n_order; ++k)
+		{
+			data.append(subsample[i]->data[ order[k] ]);
+		}
+		data.finish();
+		
+		subsample[i]->data = std::move(data);
+	}
+}
+
+void Source::sort(const int threads)
 {
 	std::vector< std::pair<size_t, std::vector<Marker>::iterator> > index; // index of current order
 	std::vector<size_t> order, check; // index order & check index for expected order
@@ -236,11 +257,11 @@ void Source::sort()
 		++i;
 	}
 	
-	// sort index by marker
+	// sort index by marker position
 	std::sort(index.begin(), index.end(),
 			  [] (const std::pair<size_t, std::vector<Marker>::iterator> & a,
 				  const std::pair<size_t, std::vector<Marker>::iterator> & b) -> bool
-			  { return a.second < b.second; }
+			  { return a.second->info.pos < b.second->info.pos; }
 			  );
 	
 	// determine order
@@ -257,18 +278,41 @@ void Source::sort()
 	std::sort(this->marker_.begin(), this->marker_.end());
 	
 	// sort data in each sample
+	std::vector<std::thread> t;
+	std::vector< std::vector<std::vector<Sample>::iterator> > sub(threads);
+	
 	for (std::vector<Sample>::iterator it = this->sample_.begin(), end = this->sample_.end(); it != end; ++it)
 	{
-		SampleData data;
-		
-		for (size_t k = 0, n = this->marker_size_; k < n; ++k)
+		for (int k = 0; k < threads; ++k)
 		{
-			data.append(it->data[ order[k] ]);
+			sub[k].push_back(it);
 		}
-		data.finish();
-		
-		it->data = std::move(data);
 	}
+	
+	for (int k = 1; k < threads; ++k)
+	{
+		t.push_back(std::thread(&sort_subsample, sub[k], order));
+	}
+	
+	sort_subsample(sub[0], order);
+	
+	for (std::thread & _t : t)
+	{
+		_t.join();
+	}
+	
+//	for (std::vector<Sample>::iterator it = this->sample_.begin(), end = this->sample_.end(); it != end; ++it)
+//	{
+//		SampleData data;
+//		
+//		for (size_t k = 0, n = this->marker_size_; k < n; ++k)
+//		{
+//			data.append(it->data[ order[k] ]);
+//		}
+//		data.finish();
+//		
+//		it->data = std::move(data);
+//	}
 }
 
 

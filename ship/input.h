@@ -20,6 +20,9 @@
 #include <deque>
 #include <algorithm>
 #include <stdexcept>
+#include <thread>
+#include <mutex>
+#include <functional>
 
 #include "timer.h"
 #include "stream.h"
@@ -176,6 +179,13 @@ class Input_VCF
 {
 private:
 	
+	struct SkipSample
+	{
+		std::vector<size_t> index; // skip sample index
+		size_t size; // count skipped samples
+		bool flag; // flag that samples were skipped
+	};
+
 	StreamLine line; // input file stream
 	size_t size; // detected sample size
 	
@@ -185,8 +195,21 @@ private:
 	std::vector<SampleInfo> _sample; // sample information
 	Genmap                  _genmap; // genetic map container
 	
-	void log(const std::string &); // log warning message
-	std::string error(const std::string &); // error message when throwing
+	std::unordered_set<size_t> positions; // unique set of read marker positions
+	SkipSample skipsample; // index of samples to skip
+	
+	std::mutex ex_line, ex_pos, ex_log, ex_source; // mutexes for multi-threading
+	bool good;
+	
+	void log(const std::string &, const size_t); // log warning message
+	std::string error(const std::string &) const; // error message when throwing
+	
+	// append samples to source
+	void source_sample(Source &);
+	
+	// append markers to source
+	void source_marker(Source &, ProgressMsg &);
+	void parse_marker(char *, Marker &, bool &, std::string &);
 	
 public:
 	
@@ -195,7 +218,7 @@ public:
 	void sample(const std::string &);
 	void genmap(const std::string &);
 	
-	void run(Source &);
+	void run(Source &, const int);
 	
 	Input_VCF(const std::string &);
 };

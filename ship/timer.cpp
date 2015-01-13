@@ -126,7 +126,7 @@ ProgressBar::ProgressBar(const size_t n, const bool _log)
 }
 
 void ProgressBar::update(const size_t _i)
-{
+{	
 	this->i += (this->i == this->target) ? 0: _i; // do not count more than target
 	
 	while (this->i + 0.5 >= this->t_dynamic)
@@ -183,7 +183,7 @@ const char ProgressBar::rest = ' ';
 // Progress message - target count is unknown
 //
 ProgressMsg::ProgressMsg(const std::string _unit, const size_t _rate, std::ostream * osp)
-: time(clock())
+: time(std::chrono::steady_clock::now())
 , unit(_unit)
 , rate(_rate)
 , line(new char[ProgressMsg::size])
@@ -207,16 +207,16 @@ void ProgressMsg::update(const size_t _i)
 	if (this->i % this->rate != 0)
 		return;
 	
-	const double elapsed = static_cast<double>(clock() - this->time) / static_cast<double>(CLOCKS_PER_SEC);
+	const double elapsed = std::chrono::duration_cast<std::chrono::duration<double> >(std::chrono::steady_clock::now() - this->time).count(); 
 	
 	// output
-	if ((elapsed - this->t) > ProgressMsg::interval)
+	if ((elapsed - this->t) >= ProgressMsg::interval)
 	{
 		this->t = elapsed; // update time checkpoint
 		
 		const double frq = static_cast<double>(this->i) / elapsed;
 		
-		int len = snprintf(this->line, ProgressMsg::size, " %lu %s (%.1f / sec)", this->i, this->unit.c_str(), frq);
+		int len = snprintf(this->line, ProgressMsg::size, " %lu %s in %.1f sec (%.1f / sec)", this->i, this->unit.c_str(), elapsed, frq);
 		
 		if (len > ProgressMsg::size)
 		{
@@ -239,7 +239,7 @@ void ProgressMsg::finish(const size_t _i) const
 {
 	const size_t final = (_i == 0) ? this->i: _i;
 	
-	const double total = static_cast<double>(clock() - this->time) / static_cast<double>(CLOCKS_PER_SEC);
+	const double total = std::chrono::duration_cast<std::chrono::duration<double> >(std::chrono::steady_clock::now() - this->time).count();
 	int len;
 	
 	if (total < 1.0)
@@ -257,7 +257,7 @@ void ProgressMsg::finish(const size_t _i) const
 	}
 }
 
-const double ProgressMsg::interval = 0.5; // print interval in seconds
+const double ProgressMsg::interval = 1.0; // print interval in seconds
 const int    ProgressMsg::size = 4096;    // max size, not exact size
 
 

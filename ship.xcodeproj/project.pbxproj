@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		070873731A13CBC2005BEE3F /* sample.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0747DC911A0CF93200D3D60D /* sample.cpp */; };
 		070ADAE01A30781800833FA5 /* allele.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 070ADADE1A30781800833FA5 /* allele.cpp */; };
+		070F54DF1A65519700CE76FC /* libpthread.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 070F54DE1A65519700CE76FC /* libpthread.dylib */; };
 		0747DC741A0CE3C900D3D60D /* main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0747DC731A0CE3C900D3D60D /* main.cpp */; };
 		0747DC7B1A0CE3ED00D3D60D /* libz.1.2.5.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 0747DC7A1A0CE3ED00D3D60D /* libz.1.2.5.dylib */; };
 		0747DC811A0CE44E00D3D60D /* stream.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0747DC7F1A0CE44E00D3D60D /* stream.cpp */; };
@@ -16,7 +17,6 @@
 		078D471C1A14C41F0035C6C9 /* source.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0747DC951A0D45F800D3D60D /* source.cpp */; };
 		07E6B4AB1A35D7B200172A93 /* census.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0747DC8E1A0CF8A600D3D60D /* census.cpp */; };
 		07EA59251A1A00910024875A /* timer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 07EA59231A1A00910024875A /* timer.cpp */; };
-		07EA59391A2366CF0024875A /* print.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 07EA59351A2363160024875A /* print.cpp */; };
 		07FD277E1A5BF760004A49CC /* command.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 07FD277C1A5BF760004A49CC /* command.cpp */; };
 		07FD27811A5C0B61004A49CC /* marker.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0747DC8B1A0CF63C00D3D60D /* marker.cpp */; };
 		07FD27821A5C0B74004A49CC /* input.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 07EA592F1A1F93450024875A /* input.cpp */; };
@@ -40,6 +40,7 @@
 /* Begin PBXFileReference section */
 		070ADADE1A30781800833FA5 /* allele.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = allele.cpp; sourceTree = "<group>"; };
 		070ADADF1A30781800833FA5 /* allele.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = allele.h; sourceTree = "<group>"; };
+		070F54DE1A65519700CE76FC /* libpthread.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libpthread.dylib; path = usr/lib/libpthread.dylib; sourceTree = SDKROOT; };
 		0747DC701A0CE3C900D3D60D /* ship */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = ship; sourceTree = BUILT_PRODUCTS_DIR; };
 		0747DC731A0CE3C900D3D60D /* main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = main.cpp; sourceTree = "<group>"; };
 		0747DC7A1A0CE3ED00D3D60D /* libz.1.2.5.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libz.1.2.5.dylib; path = usr/lib/libz.1.2.5.dylib; sourceTree = SDKROOT; };
@@ -81,6 +82,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				070F54DF1A65519700CE76FC /* libpthread.dylib in Frameworks */,
 				0747DC7B1A0CE3ED00D3D60D /* libz.1.2.5.dylib in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -91,6 +93,7 @@
 		0747DC671A0CE3C900D3D60D = {
 			isa = PBXGroup;
 			children = (
+				070F54DE1A65519700CE76FC /* libpthread.dylib */,
 				0747DC7A1A0CE3ED00D3D60D /* libz.1.2.5.dylib */,
 				0747DC721A0CE3C900D3D60D /* ship */,
 				0747DC711A0CE3C900D3D60D /* Products */,
@@ -151,7 +154,7 @@
 				07EA59271A1B6C340024875A /* loader.cpp */,
 				07EA59281A1B6C340024875A /* loader.h */,
 			);
-			name = Discarded;
+			path = Discarded;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -222,7 +225,6 @@
 				078D471C1A14C41F0035C6C9 /* source.cpp in Sources */,
 				07FD27811A5C0B61004A49CC /* marker.cpp in Sources */,
 				070873731A13CBC2005BEE3F /* sample.cpp in Sources */,
-				07EA59391A2366CF0024875A /* print.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -306,6 +308,15 @@
 		0747DC781A0CE3C900D3D60D /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CLANG_CXX_LANGUAGE_STANDARD = "c++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				GCC_C_LANGUAGE_STANDARD = c99;
+				GCC_INPUT_FILETYPE = sourcecode.cpp.cpp;
+				GCC_VERSION = "";
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SDKROOT)/usr/lib/system",
+				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Debug;
@@ -313,6 +324,15 @@
 		0747DC791A0CE3C900D3D60D /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CLANG_CXX_LANGUAGE_STANDARD = "c++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				GCC_C_LANGUAGE_STANDARD = c99;
+				GCC_INPUT_FILETYPE = sourcecode.cpp.cpp;
+				GCC_VERSION = "";
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SDKROOT)/usr/lib/system",
+				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Release;

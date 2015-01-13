@@ -99,7 +99,7 @@ FilterInput::FilterMarkerData::FilterMarkerData()
 
 void FilterInput::FilterMarkerData::remove_if_contains_unknown()
 {
-	std::clog << "Filter applied: exclude markers containing missing/undefined samples" << std::endl;
+	std::clog << "Filter applied: exclude markers containing missing/undefined data" << std::endl;
 	this->any = true;
 	this->remove_if_contains_unknown_ = true;
 }
@@ -383,7 +383,9 @@ Input_VCF::Input_VCF(const std::string & filename)
 , size(0)
 , sample_(false)
 , genmap_(false)
+, good(true)
 {
+	size_t n_head = 0;
 	bool flag = false;
 	std::string last;
 	const size_t vcf_n = vcf_required_columns.size();
@@ -406,10 +408,20 @@ Input_VCF::Input_VCF(const std::string & filename)
 		if (this->line[0] != '#') // until line is no header
 		{
 			flag = true;
+			
+			// reset and skip header
+			this->line.reset();
+			for (size_t i = 0; i < n_head; ++i)
+			{
+				if (! this->line.next())
+					throw std::runtime_error(this->error("Unable to handle input file"));
+			}
+			
 			break;
 		}
 		
 		last = this->line;
+		++n_head;
 	}
 	
 	if (!flag)
@@ -417,7 +429,7 @@ Input_VCF::Input_VCF(const std::string & filename)
 		throw std::invalid_argument(this->error("Input file does not contain data"));
 	}
 	
-	
+	// parse sample ids
 	StreamSplit token(last);
 	
 	while (token.next())
@@ -443,12 +455,14 @@ Input_VCF::Input_VCF(const std::string & filename)
 	}
 }
 
-void Input_VCF::log(const std::string & comment)
+void Input_VCF::log(const std::string & comment, const size_t line_num)
 {
-	std::clog << comment << " (line " << this->line.count() << ")" << std::endl;
+	this->ex_log.lock();
+	std::clog << comment << " (line " << line_num << ")" << std::endl;
+	this->ex_log.unlock();
 }
 
-std::string Input_VCF::error(const std::string & comment)
+std::string Input_VCF::error(const std::string & comment) const
 {
 	std::ostringstream err;
 	err << comment << "\n";
@@ -598,12 +612,9 @@ void Input_VCF::genmap(const std::string & filename)
 	this->genmap_ = true;
 }
 
-void Input_VCF::run(Source & source)
+void Input_VCF::source_sample(Source & source)
 {
-	// source samples
-	std::vector<size_t> skip; // skip sample index
-	size_t n_skip; // count skipped samples
-	bool skip_ = false; // flag that samples were skipped
+	this->skipsample.size = 0;
 	
 	for (size_t i = 0; i < this->size; ++i)
 	{
@@ -618,80 +629,143 @@ void Input_VCF::run(Source & source)
 		
 		std::clog << this->filter.comment << std::endl;
 		
-		skip.push_back(i);
-		++n_skip;
-		skip_ = true;
+		this->skipsample.index.push_back(i);
+		++this->skipsample.size;
 	}
+	
+	this->skipsample.flag = (this->skipsample.size != 0);
+	
+	this->_sample.clear();
+}
+
+void Input_VCF::source_marker(Source & source, ProgressMsg & progress)
+{
+	thread_local std::string comment;
+	thread_local std::vector<char> current;
+	thread_local size_t line_num;
+
+	while(this->good)
+	{
+		this->ex_line.lock();
+		
+		// load next line
+		if (this->line.next())
+		{
+			size_t n = strlen(this->line);
+			current.resize(n + 1);
+			strcpy(&current[0], this->line);
+			current[n] = '\0';
+			line_num = this->line.count();
+			
+			progress.update();
+		}
+		else
+		{
+			this->good = false;
+			this->ex_line.unlock();
+			break;
+		}
+		
+		this->ex_line.unlock();
+		
+		Marker marker(this->size);
+		
+		// parse marker
+		if (parse_vcf_line(&current[0], marker.info, marker.data, comment))
+		{
+			std::unique_lock<std::mutex> ul_pos(this->ex_pos);
+			
+			// check unique position
+			if (this->positions.count(marker.info.pos) != 0)
+			{
+				this->log("Duplicate marker position: " + std::to_string(marker.info.pos), line_num);
+				continue;
+			}
+			this->positions.insert(marker.info.pos);
+			
+			ul_pos.unlock();
+
+			// remove skipped samples
+			if (this->skipsample.flag)
+			{
+				for (thread_local size_t i = 0; i < this->skipsample.size; ++i)
+				{
+					if (! marker.data.erase(this->skipsample.index[i] - i)) // account for reduced size after previous skips
+					{
+						throw std::logic_error("Unexpected error while removing samples");
+					}
+				}
+			}
+
+			// approximate from genetic map
+			if (this->genmap_)
+			{
+				marker.gmap = this->_genmap.approx(marker.info);
+			}
+			
+			// evaluate marker stats
+			if (marker.stat.evaluate(marker.info, marker.data))
+			{
+				this->ex_source.lock();
+				
+				// filter marker
+				if (this->filter.apply(marker.info) &&
+					this->filter.apply(marker.data) &&
+					this->filter.apply(marker.stat) &&
+					this->filter.apply(marker.gmap) )
+				{
+					source.append(std::move(marker));
+				}
+				else
+				{
+					this->log(this->filter.comment, line_num);
+				}
+				
+				this->ex_source.unlock();
+			}
+			else
+			{
+				this->log("Invalid allele definition: " + marker.info.str(), line_num);
+			}
+		}
+		else
+		{
+			this->log(comment, line_num);
+		}
+	}
+}
+
+void Input_VCF::run(Source & source, const int threads)
+{
+	// source samples
+	this->source_sample(source);
 	
 	std::cout << "Loading input data" << std::endl;
 	std::clog << "Loading input data: " << this->line.source() << std::endl;
 	ProgressMsg progress("lines");
 	Runtime timer;
 	
-	std::string comment;
-	
 	// source markers
-	std::unordered_set<size_t> unique_pos;
-	
-	do
+	if (threads > 1)
 	{
-		Marker marker(this->size);
+		std::vector<std::thread> t;
 		
-		progress.update();
-		
-		// parse marker
-		if (parse_vcf_line(this->line, marker.info, marker.data, comment))
+		for (int i = 0; i < threads - 1; ++i)
 		{
-			// check unique position
-			if (unique_pos.count(marker.info.pos) != 0)
-			{
-				this->log("Duplicate maker position");
-				continue;
-			}
-			unique_pos.insert(marker.info.pos);
-			
-			// remove skipped samples
-			if (skip_)
-			{
-				for (size_t i = 0; i < n_skip; ++i)
-				{
-					if (! marker.data.erase(skip[i] - i)) // account for reduced size after previous skips
-					{
-						throw std::logic_error("Unexpected error while removing samples");
-					}
-				}
-			}
-			
-			// evaluate marker stats
-			if (! marker.stat.evaluate(marker.info, marker.data))
-			{
-				std::cout << marker.info.str() << std::endl;
-				this->log("Invalid allele definition");
-				continue;
-			}
-			
-			// genetic map
-			if (this->genmap_)
-			{
-				marker.gmap = this->_genmap.approx(marker.info);
-			}
-			
-			// filter marker
-			if (this->filter.apply(marker.info) &&
-				this->filter.apply(marker.data) &&
-				this->filter.apply(marker.stat) &&
-				this->filter.apply(marker.gmap) )
-			{
-				source.append(std::move(marker));
-				continue;
-			}
-			
-			comment = this->filter.comment;
+			t.push_back(std::thread(&Input_VCF::source_marker, this, std::ref(source),  std::ref(progress)));
 		}
 		
-		this->log(comment);
+		this->source_marker(source, progress); // on this thread
+		
+		for (int i = 0; i < threads - 1; ++i)
+		{
+			t[i].join();
+		}
 	}
-	while (this->line.next());
+	else
+	{
+		this->source_marker(source, progress);
+	}
 	
 	progress.finish(this->line.count());
 	std::clog << "Done! " << timer.str() << std::endl << std::endl;

@@ -14,9 +14,11 @@
 #include <unordered_map>
 #include <algorithm>
 #include <numeric>
+#include <thread>
 
 #include "marker.h"
 #include "sample.h"
+#include "timer.h"
 
 
 #define DEBUG_SOURCE
@@ -37,11 +39,11 @@ private:
 	bool finished; // flag that appending was finished
 	
 	// sort data matrix
-	void sort();
+	void sort(const int);
 	
 public:
 	
-	void finish(); // finish by sorting markers
+	void finish(const int); // finish by sorting markers
 	
 	// return marker/sample size
 	size_t sample_size() const;

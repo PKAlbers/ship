@@ -96,8 +96,6 @@ public:
 
 
 
-
-
 //******************************************************************************
 // Split line into tokens
 //******************************************************************************
@@ -166,6 +164,9 @@ public:
 	
 	// write string as line
 	void line(const std::string &, const char = '\n') const;
+	
+	// write end of line
+	void endl();
 	
 	// open stream
 	void open(const std::string &);

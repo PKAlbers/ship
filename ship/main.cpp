@@ -63,12 +63,23 @@ int main(int argc, const char * argv[])
 	cmd.register_arg("o", 1, false); // output file prefix
 	cmd.register_arg("s", 1, false); // sample file
 	cmd.register_arg("m", 1, false); // genetic map
+	cmd.register_opt("threads", 1, false); // threads
 	
 	if(! cmd.parse())
 	{
 		return EXIT_FAILURE;
 	}
 	
+	//
+	// determine number of threads
+	//
+	int threads = (cmd.is_opt("threads")) ? std::stoi(cmd.opt("threads")): 1;
+	
+	if (threads < 1)
+	{
+		std::cout << "Cannot execute with " << threads << " threads" << std::endl;
+		return EXIT_FAILURE;
+	}
 	
 	//
 	// create output files
@@ -112,8 +123,14 @@ int main(int argc, const char * argv[])
 	//
 	std::cout << std::setw(25) << std::left << "Input file: "  << cmd.arg("i") << std::endl;
 	
-	if (cmd.is_arg("s")) std::cout << std::setw(25) << std::left << "Sample file: "  << (std::string)cmd.arg("s") << std::endl;
-	if (cmd.is_arg("g")) std::cout << std::setw(25) << std::left << "Genetic map: "  << (std::string)cmd.arg("g") << std::endl;
+	if (cmd.is_arg("s"))
+		std::cout << std::setw(25) << std::left << "Sample file: "  << (std::string)cmd.arg("s") << std::endl;
+	
+	if (cmd.is_arg("g"))
+		std::cout << std::setw(25) << std::left << "Genetic map: "  << (std::string)cmd.arg("g") << std::endl;
+	
+	if (cmd.is_opt("threads"))
+		std::cout << std::setw(25) << std::left << "# threads:" << threads << std::endl;
 	
 	std::cout << std::setw(25) << std::left << "Rare variant threshold: "  << (std::string)cmd.arg("t") << std::endl;
 	
@@ -139,9 +156,9 @@ int main(int argc, const char * argv[])
 		if (cmd.is_arg("s")) input.sample(cmd.arg("s"));
 		if (cmd.is_arg("g")) input.genmap(cmd.arg("g"));
 		
-		input.run(source);
+		input.run(source, threads);
 		
-		source.finish();
+		source.finish(threads);
 	}
 	catch (std::exception & x)
 	{
@@ -196,6 +213,30 @@ int main(int argc, const char * argv[])
 	}
 	marker_file.close();
 	std::cout << "OK" << std::endl;
+	
+	std::cout << std::endl;
+	
+//	
+//	StreamOut xfile;
+//	xfile.open(prefix + ".txt");
+//	
+//
+//	{
+//		for (size_t j = 0; j < source.marker_size(); ++j)
+//		{
+//			source.marker(j).info.print(xfile);
+//			
+//			for (size_t i = 0; i < source.sample_size(); ++i)
+//			{
+//				Genotype g = source.sample(i).data[j];
+//			
+//				fprintf(xfile, " %d|%d", (int)g.h0, (int)g.h1);
+//			}
+//			
+//			xfile.endl();
+//		}
+//	}
+//	
 	
 	
 	//

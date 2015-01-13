@@ -17,6 +17,7 @@
 #include <string>
 #include <sstream>
 #include <iomanip>
+#include <chrono>
 
 
 //******************************************************************************
@@ -111,7 +112,7 @@ class ProgressMsg
 {
 private:
 	
-	const clock_t     time; // start time
+	const std::chrono::steady_clock::time_point time; // start time
 	const std::string unit; // unit of update
 	const size_t      rate; // update rate, every i'th update
 	char *            line; // line for message printing
