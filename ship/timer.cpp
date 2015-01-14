@@ -19,9 +19,9 @@ std::string timestamp(const bool no_spec_char)
 	char c[256];
 	
 	if (!no_spec_char)
-		sprintf(c, "%d-%02d-%02d_%02d:%02d:%02d",  ltm->tm_year + 1900, ltm->tm_mon, ltm->tm_mday, ltm->tm_hour, ltm->tm_min, ltm->tm_sec);
+		sprintf(c, "%d-%02d-%02d_%02d:%02d:%02d",  ltm->tm_year + 1900, ltm->tm_mon + 1, ltm->tm_mday, ltm->tm_hour, ltm->tm_min, ltm->tm_sec);
 	else
-		sprintf(c, "%d-%02d-%02d_%02dh%02dm%02ds", ltm->tm_year + 1900, ltm->tm_mon, ltm->tm_mday, ltm->tm_hour, ltm->tm_min, ltm->tm_sec);
+		sprintf(c, "%d-%02d-%02d_%02dh%02dm%02ds", ltm->tm_year + 1900, ltm->tm_mon + 1, ltm->tm_mday, ltm->tm_hour, ltm->tm_min, ltm->tm_sec);
 	
 	return std::string(c);
 }

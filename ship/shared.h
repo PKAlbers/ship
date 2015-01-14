@@ -14,30 +14,123 @@
 #include <vector>
 
 #include "types.hpp"
-#include "timer.h"
 #include "source.h"
 
 
+#define DEBUG_SHARED
 
 
-struct Rare
+
+
+struct SharedSegment
 {
-	const Marker * marker;
-	const Haplotype h;
+	
+	
+	
+	// subsample sharing haplotype
+	std::vector<Sample*> subsample;
+	unsigned long n_sample; // number of samples
+	
+	// markers in shared sequence
+	Marker* from, to;
+	unsigned long n_marker; // number of markers
+	
+	// node at breakpoint
+	SharedSegment * node;
+	uint8_t n_nodes;
 };
 
 
-struct RareHaplotype
+
+//******************************************************************************
+// Shared haplotype container
+//******************************************************************************
+class SharedHaplotype
 {
-	std::vector< std::pair<const Marker *, Haplotype> > list;
-	size_t n_marker, n_allele;
+private:
+	
+	std::vector<size_t> sample_id; // samples sharing haplotype
+	size_t size_; // number of sample IDs
+	
+public:
+	
+	const size_t    marker_id; // marker where haplotype is located
+	const Haplotype haplotype; // shared haplotype
+	
+	// detect subsample sharing haplotype
+	void detect(const Source &);
+	
+	// return subsample
+	size_t subsample(const size_t) const;
+	
+	// return number of subsamples
+	size_t size() const;
 	
 	// construct
-	RareHaplotype(const Source &, const Census &);
+	SharedHaplotype(const size_t, const Haplotype);
+};
+
+
+//******************************************************************************
+// Shared haplotype list
+//******************************************************************************
+class Shared
+{
+private:
+	
+	std::vector<SharedHaplotype> list;
+	size_t size_;
+	size_t marker_count_;
+	
+public:
+	
+	// return shared haplotype
+	const SharedHaplotype & operator [] (const size_t) const;
+	SharedHaplotype & at(const size_t);
+	
+	// return number of shared haplotypes
+	size_t size() const;
+	
+	// return number of markers
+	size_t marker_count() const;
+	
+	// identify shared haplotypes
+	void identify(const Source &, const Census &);
+	
+	// construct
+	Shared();
+};
+
+
+/*
+
+
+class Subsample
+{
+	const Selected selected;
+	std::vector<size_t> subsample;
 };
 
 
 
+class Shared
+{
+	const size_t sample_id;
+	const bool   is_shared;
+	
+	// construct
+	Shared(const size_t, const bool);
+};
+
+
+class SharedList
+{
+	std::vector<Shared> list;
+	size_t size;
+	
+	// construct
+	SharedList(const Source &, const SelectedList &);
+};
 
 
 
@@ -70,7 +163,7 @@ public:
 };
 
 
-
+*/
 
 
 

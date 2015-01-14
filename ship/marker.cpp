@@ -40,13 +40,6 @@ MarkerData::MarkerData(MarkerData && other)
 
 MarkerData & MarkerData::operator = (const MarkerData & other)
 {
-#ifdef DEBUG_MARKER
-	if (this->n != other.n)
-	{
-		throw std::runtime_error("Marker data was defined with different size");
-	}
-#endif
-	
 	if (this != &other)
 	{
 		this->data = other.data;
@@ -59,16 +52,9 @@ MarkerData & MarkerData::operator = (const MarkerData & other)
 
 MarkerData & MarkerData::operator = (MarkerData && other)
 {
-#ifdef DEBUG_MARKER
-	if (this->n != other.n)
-	{
-		throw std::runtime_error("Marker data was defined with different size");
-	}
-#endif
-	
 	if (this != &other)
 	{
-		this->data = std::move(other.data);
+		this->data.swap(other.data);
 		this->n = other.n;
 		this->i = other.i;
 		this->contains_unknown_ = other.contains_unknown_;
@@ -347,6 +333,7 @@ bool MarkerStat::evaluate(const MarkerInfo & info, const MarkerData & data)
 	size_t count_h[ HAPLOTYPE_MAX + 1 ] = { 0 }; // haplotype counts
 	size_t count_g[ HAPLOTYPE_MAX + 1 ][ HAPLOTYPE_MAX + 1 ] = { 0 }; // genotype counts
 	
+	int       i0, i1;
 	Haplotype h0, h1;
 	bool flag;
 	
@@ -355,6 +342,9 @@ bool MarkerStat::evaluate(const MarkerInfo & info, const MarkerData & data)
 	{
 		h0 = data[i].h0;
 		h1 = data[i].h1;
+		
+		i0 = (int)h0;
+		i1 = (int)h1;
 		
 		flag = true;
 		
@@ -366,8 +356,8 @@ bool MarkerStat::evaluate(const MarkerInfo & info, const MarkerData & data)
 		}
 		else
 		{
-			if (info.allele.exists((int)h0)) // check if allele is defined
-				++count_h[ (int)h0 ];
+			if (info.allele.exists(i0)) // check if allele is defined
+				++count_h[ i0 ];
 			else
 				return false;
 		}
@@ -380,15 +370,15 @@ bool MarkerStat::evaluate(const MarkerInfo & info, const MarkerData & data)
 		}
 		else
 		{
-			if (info.allele.exists((int)h1)) // check if allele is defined
-				++count_h[ (int)h1 ];
+			if (info.allele.exists(i1)) // check if allele is defined
+				++count_h[ i1 ];
 			else
 				return false;
 		}
 		
-		// count genotype (sorted)
+		// count genotype (unphased, sorted)
 		if (flag)
-			++count_g[ (int)std::min(h0, h1) ][ (int)std::min(h0, h1) ];
+			++count_g[ std::min(i0, i1) ][ std::max(i0, i1) ];
 		else
 			++this->unknown_genotype;
 	}
@@ -397,19 +387,18 @@ bool MarkerStat::evaluate(const MarkerInfo & info, const MarkerData & data)
 	// insert haplotype count
 	for (int h = 0; h < info.allele.size(); ++h)
 	{
-		this->haplotype.append(h, Census(count_h[h], size * 2));  // scale: two haplotypes per genotype
+		this->haplotype.append(Haplotype(h), Census(count_h[ h ], size * 2));  // scale: two haplotypes per genotype
 	}
 	
 	// insert genotype count
-	for (int i0 = 0; i0 < info.allele.size(); ++i0)
+	for (i0 = 0; i0 < info.allele.size(); ++i0)
 	{
 		h0 = i0;
 		
-		for (int i1 = i0; i1 < info.allele.size(); ++i1)
+		for (i1 = i0; i1 < info.allele.size(); ++i1)
 		{
 			h1 = i1;
-			
-			this->genotype.append(Genotype(h0, h1), Census(count_g[h0][h1], size));
+			this->genotype.append(Genotype(h0, h1), Census(count_g[ i0 ][ i1 ], size));
 		}
 	}
 	
@@ -590,13 +579,13 @@ MarkerGmap::MarkerGmap()
 
 MarkerGmap::MarkerGmap(const MarkerGmap & other)
 : rate(other.rate)
-, dist(other.rate)
+, dist(other.dist)
 , source(other.source)
 {}
 
 MarkerGmap::MarkerGmap(MarkerGmap && other)
 : rate(other.rate)
-, dist(other.rate)
+, dist(other.dist)
 , source(other.source)
 {}
 
@@ -625,9 +614,9 @@ MarkerGmap & MarkerGmap::operator = (MarkerGmap && other)
 void MarkerGmap::print(std::ostream & stream, const char last) const
 {
 	if (last == '\0')
-		stream << std::setprecision(8) << this->rate << ' ' << std::setprecision(6) << this->dist << ' ' << this->source;
+		stream << std::setprecision(6) << this->rate << ' ' << std::setprecision(6) << this->dist << ' ' << this->source;
 	else
-		stream << std::setprecision(8) << this->rate << ' ' << std::setprecision(6) << this->dist << ' ' << this->source << last;
+		stream << std::setprecision(6) << this->rate << ' ' << std::setprecision(6) << this->dist << ' ' << this->source << last;
 }
 
 void MarkerGmap::print(FILE * fp, const char last) const
@@ -656,7 +645,7 @@ const std::string MarkerGmap::header = "map_rate map_dist map_source";
 // Genetic marker
 //
 
-Marker::Marker(const unsigned long size)
+Marker::Marker(const size_t size)
 : data(size)
 {}
 

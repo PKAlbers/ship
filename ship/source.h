@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <numeric>
 #include <thread>
+#include <mutex>
 
 #include "marker.h"
 #include "sample.h"
@@ -40,10 +41,13 @@ private:
 	
 	// sort data matrix
 	void sort(const int);
+	void sort_subsample(const std::vector<size_t> &, const std::vector<size_t> &, ProgressBar &); // multi-threading enabled
+	std::mutex ex_sort;
 	
 public:
 	
-	void finish(const int); // finish by sorting markers
+	// finish by sorting markers
+	void finish(const int);
 	
 	// return marker/sample size
 	size_t sample_size() const;

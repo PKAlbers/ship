@@ -315,7 +315,7 @@ MarkerGmap Genmap::approx(const MarkerInfo & marker) const
 	if (upper == this->genmap.end())
 	{
 		gmap.rate = this->median_rate_;
-		gmap.dist = this->median_dist_ * (marker.pos - std::prev(upper)->second.pos);
+		gmap.dist = this->median_dist_ * (static_cast<double>(marker.pos) - static_cast<double>(std::prev(upper)->second.pos));
 		gmap.source = MarkerGmap::extrapolated;
 		return gmap;
 	}
@@ -324,12 +324,13 @@ MarkerGmap Genmap::approx(const MarkerInfo & marker) const
 	if (upper == this->genmap.begin())
 	{
 		gmap.rate = this->median_rate_;
-		gmap.dist = this->median_dist_ * (upper->second.pos - marker.pos);
+		gmap.dist = this->median_dist_ * (static_cast<double>(marker.pos) - static_cast<double>(upper->second.pos));
 		gmap.source = MarkerGmap::extrapolated;
 		return gmap;
 	}
 	
 	// linear interpolation
+	upper = this->genmap.lower_bound(marker.pos);
 	std::map<size_t, GenmapInfo>::const_iterator lower = std::prev(upper);
 	
 	double inter_pos = static_cast<double>(marker.pos);
@@ -337,8 +338,8 @@ MarkerGmap Genmap::approx(const MarkerInfo & marker) const
 	double upper_pos = static_cast<double>(upper->second.pos);
 	double f = ((inter_pos - lower_pos) / (upper_pos - lower_pos));
 	
-	gmap.rate = (lower->second.rate * (upper->second.rate - lower->second.rate)) / f;
-	gmap.dist = (lower->second.dist * (upper->second.dist - lower->second.dist)) / f;
+	gmap.rate = lower->second.rate + ((upper->second.rate - lower->second.rate) * f);
+	gmap.dist = lower->second.dist + ((upper->second.dist - lower->second.dist) * f);
 	gmap.source = MarkerGmap::interpolated;
 	
 	return gmap;

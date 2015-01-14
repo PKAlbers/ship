@@ -207,11 +207,18 @@ void Source::finish(const int threads)
 		throw std::runtime_error("No sample data provided");
 	}
 	
+	std::cout << std::endl << "Allocating data" << std::endl;
+	ProgressBar progress(this->sample_size_);
+	
 	// finish sample data
 	for (std::vector<Sample>::iterator it = this->sample_.begin(), end = this->sample_.end(); it != end; ++it)
 	{
+		progress.update();
+		
 		it->data.finish();
 	}
+	
+	progress.finish();
 	
 	// sort marker data
 	this->sort(threads);
@@ -219,22 +226,27 @@ void Source::finish(const int threads)
 	this->finished = true;
 }
 
-void sort_subsample(const std::vector<std::vector<Sample>::iterator> & subsample, const std::vector<size_t> & order)
+void Source::sort_subsample(const std::vector<size_t> & subsample, const std::vector<size_t> & order, ProgressBar & progress)
 {
-	const size_t n_subsample = subsample.size();
-	const size_t n_order     = order.size();
+	thread_local const size_t n_subsample = subsample.size();
+	thread_local const size_t n_order     = order.size();
+	thread_local SampleData data;
 	
 	for (size_t i = 0; i < n_subsample; ++i)
 	{
-		SampleData data;
+		this->ex_sort.lock();
+		progress.update();
+		this->ex_sort.unlock();
+		
+		data = SampleData();
 		
 		for (size_t k = 0; k < n_order; ++k)
 		{
-			data.append(subsample[i]->data[ order[k] ]);
+			data.append(this->sample_[subsample[i]].data[ order[k] ]);
 		}
 		data.finish();
 		
-		subsample[i]->data = std::move(data);
+		this->sample_[subsample[i]].data = std::move(data);
 	}
 }
 
@@ -242,6 +254,7 @@ void Source::sort(const int threads)
 {
 	std::vector< std::pair<size_t, std::vector<Marker>::iterator> > index; // index of current order
 	std::vector<size_t> order, check; // index order & check index for expected order
+	size_t i = 0;
 	
 	index.resize(this->marker_size_);
 	order.resize(this->marker_size_);
@@ -250,7 +263,6 @@ void Source::sort(const int threads)
 	std::iota(check.begin(), check.end(), 0); // fill vector with increasing index
 	
 	// determine order for index
-	size_t i = 0;
 	for (std::vector<Marker>::iterator it = this->marker_.begin(), end = this->marker_.end(); it != end; ++it)
 	{
 		index[i] = std::pair<size_t, std::vector<Marker>::iterator>(i, it);
@@ -279,40 +291,33 @@ void Source::sort(const int threads)
 	
 	// sort data in each sample
 	std::vector<std::thread> t;
-	std::vector< std::vector<std::vector<Sample>::iterator> > sub(threads);
+	std::vector< std::vector<size_t> > subsample(threads);
 	
-	for (std::vector<Sample>::iterator it = this->sample_.begin(), end = this->sample_.end(); it != end; ++it)
+	std::cout << std::endl << "Sorting data" << std::endl;
+	ProgressBar progress(this->sample_size_);
+	
+	int k = 0;
+	for (i = 0; i < this->sample_size_; ++i)
 	{
-		for (int k = 0; k < threads; ++k)
-		{
-			sub[k].push_back(it);
-		}
+		subsample[k++].push_back(i);
+		
+		if (k == threads)
+			k = 0;
 	}
 	
-	for (int k = 1; k < threads; ++k)
+	for (k = 1; k < threads; ++k)
 	{
-		t.push_back(std::thread(&sort_subsample, sub[k], order));
+		t.push_back(std::thread(&Source::sort_subsample, this, subsample[k], order, std::ref(progress)));
 	}
 	
-	sort_subsample(sub[0], order);
+	this->sort_subsample(subsample[0], order, progress);
 	
 	for (std::thread & _t : t)
 	{
 		_t.join();
 	}
 	
-//	for (std::vector<Sample>::iterator it = this->sample_.begin(), end = this->sample_.end(); it != end; ++it)
-//	{
-//		SampleData data;
-//		
-//		for (size_t k = 0, n = this->marker_size_; k < n; ++k)
-//		{
-//			data.append(it->data[ order[k] ]);
-//		}
-//		data.finish();
-//		
-//		it->data = std::move(data);
-//	}
+	progress.finish();
 }
 
 

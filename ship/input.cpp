@@ -204,7 +204,7 @@ void FilterInput::FilterSampleInfo::remove_key(const std::string & filename)
 }
 
 
-bool FilterInput::apply(const MarkerInfo & info)
+bool FilterInput::apply(const MarkerInfo & info, std::string & comment)  const
 {
 	if (! this->markerinfo.any)
 		return true;
@@ -212,49 +212,49 @@ bool FilterInput::apply(const MarkerInfo & info)
 	if (this->markerinfo.remove_if_contains_snp_ &&
 		info.allele.contains_snp())
 	{
-		this->comment = "Marker excluded: contains SNPs";
+		comment = "Marker excluded: contains SNPs";
 		return false;
 	}
 	
 	if (this->markerinfo.remove_if_contains_indel_ &&
 		info.allele.contains_indel())
 	{
-		this->comment = "Marker excluded: contains INDELs";
+		comment = "Marker excluded: contains INDELs";
 		return false;
 	}
 	
 	if (this->markerinfo.remove_if_contains_other_ &&
 		info.allele.contains_other())
 	{
-		this->comment = "Marker excluded: contains invalid allele definitions";
+		comment = "Marker excluded: contains invalid allele definitions";
 		return false;
 	}
 	
 	if (this->markerinfo.remove_if_biallelic_ &&
 		info.allele.size() == 2)
 	{
-		this->comment = "Marker excluded: is bi-allelic";
+		comment = "Marker excluded: is bi-allelic";
 		return false;
 	}
 	
 	if (this->markerinfo.remove_if_multiallelic_ &&
 		info.allele.size() > 2)
 	{
-		this->comment = "Marker excluded: is multi-allelic";
+		comment = "Marker excluded: is multi-allelic";
 		return false;
 	}
 	
 	if (this->markerinfo.remove_pos_ &&
 		this->markerinfo.remove_pos_set.count(info.pos) != 0)
 	{
-		this->comment = "Marker excluded: at specified position '" + std::to_string(info.pos) + "'";
+		comment = "Marker excluded: at specified position '" + std::to_string(info.pos) + "'";
 		return false;
 	}
 	
 	return true;
 }
 
-bool FilterInput::apply(const MarkerData & data)
+bool FilterInput::apply(const MarkerData & data, std::string & comment) const
 {
 	if (! this->markerdata.any)
 		return true;
@@ -262,14 +262,14 @@ bool FilterInput::apply(const MarkerData & data)
 	if (this->markerdata.remove_if_contains_unknown_ &&
 		data.contains_unknown())
 	{
-		this->comment = "Marker excluded: contains invalid sample alleles";
+		comment = "Marker excluded: contains invalid sample alleles";
 		return false;
 	}
 	
 	return true;
 }
 
-bool FilterInput::apply(const MarkerStat & stat)
+bool FilterInput::apply(const MarkerStat & stat, std::string & comment) const
 {
 	if (! this->markerstat.any)
 		return true;
@@ -284,7 +284,7 @@ bool FilterInput::apply(const MarkerStat & stat)
 		{
 			if (stat.haplotype.census(i) <= this->markerstat.remove_hap_below_cutoff)
 			{
-				this->comment = "Marker excluded: allele count/frequency below threshold";
+				comment = "Marker excluded: allele count/frequency below threshold";
 				return false;
 			}
 		}
@@ -296,7 +296,7 @@ bool FilterInput::apply(const MarkerStat & stat)
 		{
 			if (stat.haplotype.census(i) >= this->markerstat.remove_hap_above_cutoff)
 			{
-				this->comment = "Marker excluded: allele count/frequency above threshold";
+				comment = "Marker excluded: allele count/frequency above threshold";
 				return false;
 			}
 		}
@@ -308,7 +308,7 @@ bool FilterInput::apply(const MarkerStat & stat)
 		{
 			if (stat.genotype.census(i) <= this->markerstat.remove_gen_below_cutoff)
 			{
-				this->comment = "Marker excluded: genotype count/frequency below threshold";
+				comment = "Marker excluded: genotype count/frequency below threshold";
 				return false;
 			}
 		}
@@ -320,7 +320,7 @@ bool FilterInput::apply(const MarkerStat & stat)
 		{
 			if (stat.genotype.census(i) >= this->markerstat.remove_gen_above_cutoff)
 			{
-				this->comment = "Marker excluded: genotype count/frequency above threshold";
+				comment = "Marker excluded: genotype count/frequency above threshold";
 				return false;
 			}
 		}
@@ -329,7 +329,7 @@ bool FilterInput::apply(const MarkerStat & stat)
 	return true;
 }
 
-bool FilterInput::apply(const MarkerGmap & gmap)
+bool FilterInput::apply(const MarkerGmap & gmap, std::string & comment) const
 {
 	if (! this->markergmap.any)
 		return true;
@@ -337,28 +337,28 @@ bool FilterInput::apply(const MarkerGmap & gmap)
 	if (this->markergmap.remove_if_source_interpolated_ &&
 		gmap.source == MarkerGmap::interpolated)
 	{
-		this->comment = "Marker excluded: was interpolated from genetic map";
+		comment = "Marker excluded: was interpolated from genetic map";
 		return false;
 	}
 	
 	if (this->markergmap.remove_if_source_extrapolated_ &&
 		gmap.source == MarkerGmap::extrapolated)
 	{
-		this->comment = "Marker excluded: was extrapolated from genetic map";
+		comment = "Marker excluded: was extrapolated from genetic map";
 		return false;
 	}
 	
 	if (this->markergmap.remove_if_source_unknown_&&
 		gmap.source == MarkerGmap::unknown)
 	{
-		this->comment = "Marker excluded: unable to approxmiate from genetic map";
+		comment = "Marker excluded: unable to approxmiate from genetic map";
 		return false;
 	}
 	
 	return true;
 }
 
-bool FilterInput::apply(const SampleInfo & info)
+bool FilterInput::apply(const SampleInfo & info, std::string & comment) const
 {
 	if (! this->sampleinfo.any)
 		return true;
@@ -366,7 +366,7 @@ bool FilterInput::apply(const SampleInfo & info)
 	if (this->sampleinfo.remove_key_ &&
 		this->sampleinfo.remove_key_set.count(info.key) != 0)
 	{
-		this->comment = "Sample excluded: identifier '" + info.key + "' excluded";
+		comment = "Sample excluded: identifier '" + info.key + "' excluded";
 		return false;
 	}
 	
@@ -475,33 +475,33 @@ void Input_VCF::sample(const std::string & filename)
 {
 	size_t n = 0;
 	
-	StreamLine line(filename);
+	StreamLine sample_line(filename);
 	
 	// skip header
-	if (! line.next())
+	if (! sample_line.next())
 	{
 		throw std::invalid_argument("Cannot read from sample file");
 	}
 	
 	std::cout << "Loading sample file" << std::endl;
-	std::clog << "Loading sample file: " << line.source() << std::endl;
+	std::clog << "Loading sample file: " << sample_line.source() << std::endl;
 	ProgressMsg progress("lines");
 	Runtime timer;
 	
 	// walkabout
-	while (line.next())
+	while (sample_line.next())
 	{
 		SampleInfo info;
 		
 		progress.update();
 		
-		if(parse_sample_line(line, info))
+		if(parse_sample_line(sample_line, info))
 		{
 			if (info.key != _sample[n].key)
 			{
 				throw std::invalid_argument("Sample IDs do not match\n"
 											"In line file:  '" + _sample[n].key + "'\n"
-											"In sample file: '" + info.key + "' (line " + std::to_string(line.count()) +  ")");
+											"In sample file: '" + info.key + "' (line " + std::to_string(sample_line.count()) +  ")");
 			}
 			
 			// overwrite
@@ -511,7 +511,7 @@ void Input_VCF::sample(const std::string & filename)
 		}
 		
 		throw std::invalid_argument("Invalid sample file format\n"
-									"Cannot parse sample information on line " + std::to_string(line.count()));
+									"Cannot parse sample information on line " + std::to_string(sample_line.count()));
 	}
 	
 	if (n != this->size)
@@ -521,7 +521,7 @@ void Input_VCF::sample(const std::string & filename)
 								"Detected in sample file:  " + std::to_string(n));
 	}
 	
-	progress.finish(this->line.count());
+	progress.finish(sample_line.count());
 	std::clog << "Done! " << timer.str() << std::endl << std::endl;
 	
 	this->sample_ = true;
@@ -531,26 +531,28 @@ void Input_VCF::genmap(const std::string & filename)
 {
 	size_t cols;
 	
-	StreamLine line(filename);
-	StreamSplit token(line);
+	StreamLine genmap_line(filename);
 	
-	// count columns
-	while (line.next()) {}
-	cols = line.count();
-	
-	// skip header
-	if (! line.next())
+	// count columns & skip header
+	if (! genmap_line.next())
 	{
 		throw std::invalid_argument("Cannot read from genetic map");
 	}
 	
+	// count columns
+	{
+		StreamSplit token(genmap_line);
+		while (token.next()) {}
+		cols = token.count();
+	}
+	
 	std::cout << "Loading genetic map" << std::endl;
-	std::clog << "Loading genetic map: " << line.source() << std::endl;
+	std::clog << "Loading genetic map: " << genmap_line.source() << std::endl;
 	ProgressMsg progress("lines");
 	Runtime timer;
 	
 	// walkabout
-	while (line.next())
+	while (genmap_line.next())
 	{
 		GenmapInfo info;
 		
@@ -560,7 +562,7 @@ void Input_VCF::genmap(const std::string & filename)
 		{
 			case 3:
 			{
-				if (parse_genmap_3col(line, info))
+				if (parse_genmap_3col(genmap_line, info))
 				{
 					try
 					{
@@ -574,13 +576,13 @@ void Input_VCF::genmap(const std::string & filename)
 				else
 				{
 					throw std::invalid_argument("Invalid genetic map format\n"
-												"Cannot parse information on line " + std::to_string(line.count()));
+												"Cannot parse information on line " + std::to_string(genmap_line.count()));
 				}
 				break;
 			}
 			case 4:
 			{
-				if (parse_genmap_4col(line, info))
+				if (parse_genmap_4col(genmap_line, info))
 				{
 					try
 					{
@@ -594,7 +596,7 @@ void Input_VCF::genmap(const std::string & filename)
 				else
 				{
 					throw std::invalid_argument("Invalid genetic map format\n"
-												"Cannot parse information on line " + std::to_string(line.count()));
+												"Cannot parse information on line " + std::to_string(genmap_line.count()));
 				}
 				break;
 			}
@@ -606,7 +608,10 @@ void Input_VCF::genmap(const std::string & filename)
 		}
 	}
 	
-	progress.finish(this->line.count());
+	// finish genetic map
+	this->_genmap.finish();
+	
+	progress.finish(genmap_line.count());
 	std::clog << "Done! " << timer.str() << std::endl << std::endl;
 	
 	this->genmap_ = true;
@@ -614,12 +619,14 @@ void Input_VCF::genmap(const std::string & filename)
 
 void Input_VCF::source_sample(Source & source)
 {
+	std::string comment;
+	
 	this->skipsample.size = 0;
 	
 	for (size_t i = 0; i < this->size; ++i)
 	{
 		// filter sample
-		if (this->filter.apply(this->_sample[i]))
+		if (this->filter.apply(this->_sample[i], comment))
 		{
 			Sample sample;
 			sample.info = std::move(this->_sample[i]);
@@ -627,7 +634,7 @@ void Input_VCF::source_sample(Source & source)
 			continue;
 		}
 		
-		std::clog << this->filter.comment << std::endl;
+		std::clog << comment << std::endl;
 		
 		this->skipsample.index.push_back(i);
 		++this->skipsample.size;
@@ -643,7 +650,8 @@ void Input_VCF::source_marker(Source & source, ProgressMsg & progress)
 	thread_local std::string comment;
 	thread_local std::vector<char> current;
 	thread_local size_t line_num;
-
+	thread_local Marker marker(this->size);
+	
 	while(this->good)
 	{
 		this->ex_line.lock();
@@ -668,22 +676,22 @@ void Input_VCF::source_marker(Source & source, ProgressMsg & progress)
 		
 		this->ex_line.unlock();
 		
-		Marker marker(this->size);
+		marker = Marker(this->size);
 		
 		// parse marker
 		if (parse_vcf_line(&current[0], marker.info, marker.data, comment))
 		{
-			std::unique_lock<std::mutex> ul_pos(this->ex_pos);
-			
-			// check unique position
-			if (this->positions.count(marker.info.pos) != 0)
-			{
-				this->log("Duplicate marker position: " + std::to_string(marker.info.pos), line_num);
-				continue;
-			}
-			this->positions.insert(marker.info.pos);
-			
-			ul_pos.unlock();
+//			std::unique_lock<std::mutex> ul_pos(this->ex_pos);
+//			
+//			// check unique position
+//			if (this->positions.count(marker.info.pos) != 0)
+//			{
+//				this->log("Duplicate marker position: " + std::to_string(marker.info.pos), line_num);
+//				continue;
+//			}
+//			this->positions.insert(marker.info.pos);
+//			
+//			ul_pos.unlock();
 
 			// remove skipped samples
 			if (this->skipsample.flag)
@@ -706,22 +714,20 @@ void Input_VCF::source_marker(Source & source, ProgressMsg & progress)
 			// evaluate marker stats
 			if (marker.stat.evaluate(marker.info, marker.data))
 			{
-				this->ex_source.lock();
-				
 				// filter marker
-				if (this->filter.apply(marker.info) &&
-					this->filter.apply(marker.data) &&
-					this->filter.apply(marker.stat) &&
-					this->filter.apply(marker.gmap) )
+				if (this->filter.apply(marker.info, comment) &&
+					this->filter.apply(marker.data, comment) &&
+					this->filter.apply(marker.stat, comment) &&
+					this->filter.apply(marker.gmap, comment) )
 				{
+					this->ex_source.lock();
 					source.append(std::move(marker));
+					this->ex_source.unlock();
 				}
 				else
 				{
-					this->log(this->filter.comment, line_num);
+					this->log(comment, line_num);
 				}
-				
-				this->ex_source.unlock();
 			}
 			else
 			{

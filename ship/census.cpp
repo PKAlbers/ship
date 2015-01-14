@@ -112,7 +112,7 @@ void Census::scale(const size_t _size)
 	
 	if (this->n > _size)
 	{
-		throw std::logic_error("Cannot scale frequency with size larger than count");
+		throw std::logic_error("Cannot scale frequency with count larger than size");
 	}
 	
 	this->f = static_cast<double>(this->n) / static_cast<double>(_size);

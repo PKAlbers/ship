@@ -111,7 +111,7 @@ void SampleData::finish()
 	// copy data
 	for (std::vector<Block>::const_iterator it = this->collect.cbegin(), end = this->collect.cend(); it != end; ++it)
 	{
-		this->data.insert(this->data.cend(), it->block.cbegin(), it->block.cend());
+		this->data.insert(this->data.end(), it->block.begin(), it->block.end());
 	}
 	
 	// clear data blocks

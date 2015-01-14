@@ -161,14 +161,12 @@ public:
 	FilterMarkerGmap markergmap;
 	FilterSampleInfo sampleinfo;
 	
-	std::string comment; // leave explanation when declinded
-	
 	// apply filters
-	bool apply(const MarkerInfo &);
-	bool apply(const MarkerData &);
-	bool apply(const MarkerStat &);
-	bool apply(const MarkerGmap &);
-	bool apply(const SampleInfo &);
+	bool apply(const MarkerInfo &, std::string &) const;
+	bool apply(const MarkerData &, std::string &) const;
+	bool apply(const MarkerStat &, std::string &) const;
+	bool apply(const MarkerGmap &, std::string &) const;
+	bool apply(const SampleInfo &, std::string &) const;
 };
 
 
