@@ -61,7 +61,7 @@ int main(int argc, const char * argv[])
 	
 	// aeguments
 	cmd.register_arg("i", 1, true); // input file
-	cmd.register_arg("t", 1, true); // rare variant threshold
+	cmd.register_arg("f", 1, true); // fx, rare variant threshold
 	cmd.register_arg("o", 1, false); // output file prefix
 	cmd.register_arg("s", 1, false); // sample file
 	cmd.register_arg("m", 1, false); // genetic map
@@ -151,7 +151,7 @@ int main(int argc, const char * argv[])
 	//
 	// Load source data
 	//
-	Source source;
+	Source source('m'); // allocate memory for data by marker
 	
 	try
 	{
@@ -250,14 +250,12 @@ int main(int argc, const char * argv[])
 	//
 	// Identify rare variants
 	//
-	Shared shared;
+	std::cout << "Identifying rare haplotypes ... " << std::flush;
 	
-	std::cout << "Identifying rare alleles ... " << std::flush;
-	
-	shared.identify(source, cutoff);
+	Shared shared(source, cutoff);
 	
 	std::cout << "OK" << std::endl;
-	std::cout << "Identified rare alleles: " << shared.size() << " (in " << shared.marker_count() << " markers)" << std::endl;
+	std::cout << "Identified rare haplotypes: " << shared.size() << " (in " << shared.marker_count() << " markers)" << std::endl;
 	std::cout << std::endl;
 	
 	//
@@ -266,21 +264,23 @@ int main(int argc, const char * argv[])
 	{
 		std::vector< std::vector<size_t> > matrix(source.sample_size(), std::vector<size_t>(source.sample_size(), 0));
 		
-		std::cout << "Detecting rare allele sharing" << std::endl;
+		std::cout << "Detecting haplotype sharing" << std::endl;
 		ProgressBar progress(shared.size());
 		
-		for (size_t i = 0; i < shared.size(); ++i)
+		for (size_t i = 0, n = shared.size(); i < n; ++i)
 		{
 			progress.update();
 			
-			shared.at(i).detect(source); // detect subsample
+			shared.at(i).subsample(source); // detect subsample
 			
-			if (shared[i].size() > 1) // exclude doubletons in same individual
+			size_t nsub = shared[i].type.sample_id.size();
+			
+			if (nsub > 1) // exclude doubletons in same individual
 			{
-				for (size_t k0 = 0, k1 = 1; k1 < shared[i].size(); ++k0, ++k1)
+				for (size_t k0 = 0, k1 = 1; k1 < nsub; ++k0, ++k1)
 				{
-					const size_t x = shared[i].subsample(k0);
-					const size_t y = shared[i].subsample(k1);
+					const size_t x = shared[i].type.sample_id[k0];
+					const size_t y = shared[i].type.sample_id[k1];
 					
 					++matrix[x][y];
 					++matrix[y][x];
@@ -311,10 +311,16 @@ int main(int argc, const char * argv[])
 			}
 			shared_file.endl();
 		}
+		
 		shared_file.close();
 		std::cout << "OK" << std::endl;
 		std::cout << std::endl;
 	}
+	
+	
+	
+	shared.scan(source, threads);
+
 	
 	
 	std::cout << std::endl << "Done!" << std::endl << runtime.str() << std::endl;

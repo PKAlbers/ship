@@ -12,6 +12,9 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <vector>
+#include <set>
+#include <thread>
+#include <mutex>
 
 #include "types.hpp"
 #include "source.h"
@@ -20,73 +23,101 @@
 #define DEBUG_SHARED
 
 
-
-
-struct SharedSegment
-{
-	
-	
-	
-	// subsample sharing haplotype
-	std::vector<Sample*> subsample;
-	unsigned long n_sample; // number of samples
-	
-	// markers in shared sequence
-	Marker* from, to;
-	unsigned long n_marker; // number of markers
-	
-	// node at breakpoint
-	SharedSegment * node;
-	uint8_t n_nodes;
-};
-
-
-
 //******************************************************************************
-// Shared haplotype container
+// Shared haplotype containers
 //******************************************************************************
-class SharedHaplotype
+
+struct SharedType;
+struct SharedTree;
+struct SharedNode;
+struct SharedRoot;
+
+//
+// Shared haplotype
+//
+struct SharedType
 {
-private:
-	
-	std::vector<size_t> sample_id; // samples sharing haplotype
-	size_t size_; // number of sample IDs
-	
-public:
-	
-	const size_t    marker_id; // marker where haplotype is located
-	const Haplotype haplotype; // shared haplotype
-	
-	// detect subsample sharing haplotype
-	void detect(const Source &);
-	
-	// return subsample
-	size_t subsample(const size_t) const;
-	
-	// return number of subsamples
-	size_t size() const;
+	const Haplotype     haplotype; // shared haplotype
+	const size_t        marker_id; // marker where haplotype is located
+	std::vector<size_t> sample_id; // subsample sharing haplotype
 	
 	// construct
-	SharedHaplotype(const size_t, const Haplotype);
+	SharedType(const Haplotype, const size_t);
 };
 
 
-//******************************************************************************
-// Shared haplotype list
-//******************************************************************************
+//
+// Shared haplotype tree structure
+//
+struct SharedTree
+{
+	const bool              side; // left (false) or right (true) sided scan
+	size_t                  stop; // marker ID at breakpoint
+	std::vector<SharedNode> node; // node of off-going branches
+	
+	// scan structure to create node, recursively
+	void scan(const Source &, const SharedType &); // return breakpoint
+	
+	// count nodes and sub-nodes
+	size_t count() const;
+	
+	// construct
+	SharedTree(const bool);
+};
+
+
+//
+// Shared haplotype node in tree
+//
+struct SharedNode
+{
+	SharedType type; // shared haplotype
+	SharedTree tree; // tree structure
+	
+	// construct
+	SharedNode(const Haplotype, const size_t, const bool);
+};
+
+
+//
+// Shared haplotype root of tree
+//
+struct SharedRoot
+{
+	SharedType type; // shared haplotype
+	SharedTree ltree, rtree; // left/right tree structure
+	
+	// get subsample sharing root haplotype
+	void subsample(const Source &);
+	
+	// scan left & right tree
+	void scan(const Source &);
+	
+	// construct
+	SharedRoot(const Haplotype, const size_t);
+};
+
+
+//
+// All shared haplotypes
+//
 class Shared
 {
 private:
 	
-	std::vector<SharedHaplotype> list;
-	size_t size_;
-	size_t marker_count_;
+	std::vector<SharedRoot> root; // root of shared haplotype structures
+	size_t size_; // number of shared haplotypes
+	size_t marker_count_; // number of markers
+	
+	// scan with mutliple threads
+	void scan_parallel(const std::vector<size_t> &, const Source &, ProgressBar &);
+	std::mutex ex_scan;
 	
 public:
 	
 	// return shared haplotype
-	const SharedHaplotype & operator [] (const size_t) const;
-	SharedHaplotype & at(const size_t);
+	const SharedRoot & operator [] (const size_t) const;
+	SharedRoot & at(const size_t);
 	
 	// return number of shared haplotypes
 	size_t size() const;
@@ -94,114 +125,14 @@ public:
 	// return number of markers
 	size_t marker_count() const;
 	
-	// identify shared haplotypes
-	void identify(const Source &, const Census &);
+	// scan all shared haplotype structures
+	void scan(const Source &, const int);
 	
 	// construct
-	Shared();
+	Shared(const Source &, const Census &);
 };
 
 
-/*
-
-
-class Subsample
-{
-	const Selected selected;
-	std::vector<size_t> subsample;
-};
-
-
-
-class Shared
-{
-	const size_t sample_id;
-	const bool   is_shared;
-	
-	// construct
-	Shared(const size_t, const bool);
-};
-
-
-class SharedList
-{
-	std::vector<Shared> list;
-	size_t size;
-	
-	// construct
-	SharedList(const Source &, const SelectedList &);
-};
-
-
-
-struct SharedHaplotype
-{
-	const Haplotype allele;
-	const std::vector<Marker>::const_iterator marker;
-	const std::vector< std::vector<Sample>::const_iterator > sample;
-};
-
-
-class SharedList
-{
-private:
-	
-	std::vector<SharedHaplotype> list;
-	const std::vector<Marker>::const_iterator beg;
-	const std::vector<Marker>::const_iterator end;
-	size_t n;
-	
-public:
-	
-	operator std::vector<Marker>::const_iterator () const;
-	
-	bool next();
-	bool prev();
-	
-	// construct
-	SharedList(const std::vector<Marker> &);
-};
-
-
-*/
-
-
-
-
-
-
-//******************************************************************************
-// Shared haplotype containers
-//******************************************************************************
-
-/*
- struct SharedTree
- {
-	// subsample sharing haplotype
-	std::vector<Sample*> subsample;
-	unsigned long n_sample; // number of samples
-	
-	// markers in shared sequence
-	Marker* from, to;
-	unsigned long n_marker; // number of markers
-	
-	// node at breakpoint
-	SharedTree * node;
-	uint8_t n_nodes;
-	
-	// assign
-	SharedTree & operator = (const SharedTree &);
-	SharedTree & operator = (SharedTree &&);
-	
-	// construct
-	SharedTree();
-	SharedTree(const SharedTree &);
-	SharedTree(SharedTree &&);
-	
-	// destruct
-	~SharedTree();
- };
- */
 
 
 #endif /* defined(__ship__shared__) */

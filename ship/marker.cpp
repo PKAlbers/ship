@@ -99,7 +99,7 @@ bool MarkerData::erase(const size_t _i)
 
 void MarkerData::remove()
 {
-	std::vector<Genotype> x;
+	std::vector<Datatype> x;
 	this->data.swap(x);
 	
 	this->n = 0;
@@ -127,7 +127,7 @@ bool MarkerData::contains_unknown() const
 	return this->contains_unknown_;
 }
 
-const Genotype & MarkerData::operator [] (const size_t _i) const
+Genotype MarkerData::operator [] (const size_t _i) const
 {
 #ifdef DEBUG_MARKER
 	if (_i >= this->i)
@@ -148,11 +148,22 @@ void MarkerData::print(std::ostream & stream, const char last) const
 	}
 #endif
 	
-	stream << (int)this->data[0].h0 << ' ' << (int)this->data[0].h1;
-	
-	for (size_t k = 1; k < this->n; ++k)
+	if (this->i > 0)
 	{
-		stream << ' ' << (int)this->data[k].h0 << ' ' << (int)this->data[k].h1;
+		Genotype g = this->data[0];
+		
+		stream << g.h0.str() << ' ' << g.h1.str();
+		
+		for (size_t k = 1; k < this->n; ++k)
+		{
+			g = this->data[k];
+			
+			stream << ' ' << g.h0.str() << ' ' << g.h1.str();
+		}
+	}
+	else
+	{
+		stream << ".";
 	}
 	
 	if (last != '\0')
@@ -168,11 +179,22 @@ void MarkerData::print(FILE * fp, const char last) const
 	}
 #endif
 	
-	fprintf(fp, "%d %d", (int)this->data[i].h0, (int)this->data[i].h1);
-	
-	for (size_t k = 1; k < this->n; ++k)
+	if (this->i > 0)
 	{
-		fprintf(fp, " %d %d", (int)this->data[k].h0, (int)this->data[k].h1);
+		Genotype g = this->data[0];
+		
+		fprintf(fp, "%s %s", g.h0.str().c_str(), g.h1.str().c_str());
+		
+		for (size_t k = 1; k < this->n; ++k)
+		{
+			g = this->data[k];
+			
+			fprintf(fp, " %s %s", g.h0.str().c_str(), g.h1.str().c_str());
+		}
+	}
+	else
+	{
+		fprintf(fp, ".");
 	}
 	
 	if (last != '\0')
@@ -245,13 +267,13 @@ bool MarkerInfo::operator != (const MarkerInfo & other) const { return (this->po
 
 void MarkerInfo::print(std::ostream & stream, const char last) const
 {
-	stream << (int)this->chr << ' ' << this->pos << ' ' << this->key << ' ' << this->allele.size() << ' ';
+	stream << this->chr.str() << ' ' << this->pos << ' ' << this->key << ' ' << this->allele.size() << ' ';
 	this->allele.print(stream, last);
 }
 
 void MarkerInfo::print(FILE * fp, const char last) const
 {
-	fprintf(fp, "%d %lu %s %d ", (int)this->chr, this->pos, this->key.c_str(), this->allele.size());
+	fprintf(fp, "%s %lu %s %d ", this->chr.str().c_str(), this->pos, this->key.c_str(), this->allele.size());
 	this->allele.print(fp, last);
 }
 
@@ -330,8 +352,8 @@ bool MarkerStat::evaluate(const MarkerInfo & info, const MarkerData & data)
 	
 	const size_t size = data.size();
 	
-	size_t count_h[ HAPLOTYPE_MAX + 1 ] = { 0 }; // haplotype counts
-	size_t count_g[ HAPLOTYPE_MAX + 1 ][ HAPLOTYPE_MAX + 1 ] = { 0 }; // genotype counts
+	size_t count_h[ Haplotype::unknown ] = { 0 }; // haplotype counts
+	size_t count_g[ Haplotype::unknown ][ Haplotype::unknown ] = { 0 }; // genotype counts
 	
 	int       i0, i1;
 	Haplotype h0, h1;
@@ -346,13 +368,13 @@ bool MarkerStat::evaluate(const MarkerInfo & info, const MarkerData & data)
 		i0 = (int)h0;
 		i1 = (int)h1;
 		
-		flag = true;
+		flag = false;
 		
 		// count first haplotype
 		if (h0.is_unknown())
 		{
 			++unknown_haplotype; // missing/undefined allele
-			flag = false;
+			flag = true;
 		}
 		else
 		{
@@ -366,7 +388,7 @@ bool MarkerStat::evaluate(const MarkerInfo & info, const MarkerData & data)
 		if (h1.is_unknown())
 		{
 			++this->unknown_haplotype; // missing/undefined allele
-			flag = false;
+			flag = true;
 		}
 		else
 		{
@@ -378,9 +400,13 @@ bool MarkerStat::evaluate(const MarkerInfo & info, const MarkerData & data)
 		
 		// count genotype (unphased, sorted)
 		if (flag)
-			++count_g[ std::min(i0, i1) ][ std::max(i0, i1) ];
-		else
+		{
 			++this->unknown_genotype;
+		}
+		else
+		{
+			++count_g[ std::min(i0, i1) ][ std::max(i0, i1) ];
+		}
 	}
 	
 	
@@ -479,7 +505,7 @@ void MarkerStat::print(std::ostream & stream, const char last) const
 	for (i = 0; i < g_size; ++i)
 	{
 		g = this->genotype.type(i);
-		stream << sep << g.h0 << '/' << g.h1 << ':' << (size_t)this->genotype.census(i);
+		stream << sep << g.h0.str() << '/' << g.h1.str() << ':' << (size_t)this->genotype.census(i);
 		sep = ',';
 	}
 	stream << " ";
@@ -489,7 +515,7 @@ void MarkerStat::print(std::ostream & stream, const char last) const
 	for (i = 0; i < g_size; ++i)
 	{
 		g = this->genotype.type(i);
-		stream << sep << g.h0 << '/' << g.h1 << ':' << std::setprecision(6) << (double)this->genotype.census(i);
+		stream << sep << g.h0.str() << '/' << g.h1.str() << ':' << std::setprecision(6) << (double)this->genotype.census(i);
 		sep = ',';
 	}
 	stream << " ";
@@ -534,20 +560,20 @@ void MarkerStat::print(FILE * fp, const char last) const
 	
 	// genotype_count
 	g = this->genotype.type(0);
-	fprintf(fp, " %d/%d:%lu", (int)g.h0, (int)g.h1, (size_t)this->genotype.census(0));
+	fprintf(fp, " %s/%s:%lu", g.h0.str().c_str(), g.h1.str().c_str(), (size_t)this->genotype.census(0));
 	for (i = 1; i < g_size; ++i)
 	{
 		g = this->genotype.type(i);
-		fprintf(fp, ",%d/%d:%lu", (int)g.h0, (int)g.h1, (size_t)this->genotype.census(i));
+		fprintf(fp, ",%s/%s:%lu", g.h0.str().c_str(), g.h1.str().c_str(), (size_t)this->genotype.census(i));
 	}
 	
 	// genotype_freq
 	g = this->genotype.type(0);
-	fprintf(fp, " %d/%d:%0.6f", (int)g.h0, (int)g.h1, (double)this->genotype.census(0));
+	fprintf(fp, " %s/%s:%0.6f", g.h0.str().c_str(), g.h1.str().c_str(), (double)this->genotype.census(0));
 	for (i = 1; i < g_size; ++i)
 	{
 		g = this->genotype.type(i);
-		fprintf(fp, ",%d/%d:%0.6f", (int)g.h0, (int)g.h1, (double)this->genotype.census(i));
+		fprintf(fp, ",%s/%s:%0.6f", g.h0.str().c_str(), g.h1.str().c_str(), (double)this->genotype.census(i));
 	}
 	
 	// miss_genotype_count + miss_genotype_freq

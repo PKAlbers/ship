@@ -14,14 +14,44 @@
 //******************************************************************************
 
 
-Source::Source()
+Source::Source(const char _collect_data)
 : sample_size_(0)
 , marker_size_(0)
 , finished(false)
-{}
+{
+	switch (_collect_data)
+	{
+		case 0:
+		{
+			this->collect_data = CollectData::on_marker;
+			break;
+		}
+		case 'm':
+		{
+			this->collect_data = CollectData::on_marker;
+			break;
+		}
+		case 1:
+		{
+			this->collect_data = CollectData::on_sample;
+			break;
+		}
+		case 's':
+		{
+			this->collect_data = CollectData::on_sample;
+			break;
+		}
+		default:
+		{
+			this->collect_data = CollectData::on_both;
+			break;
+		}
+	}
+}
 
 Source::Source(const Source & other)
-: sample_(other.sample_)
+: collect_data(other.collect_data)
+, sample_(other.sample_)
 , marker_(other.marker_)
 , sample_size_(other.sample_size_)
 , marker_size_(other.marker_size_)
@@ -29,7 +59,8 @@ Source::Source(const Source & other)
 {}
 
 Source::Source(Source && other)
-: sample_(std::move(other.sample_))
+: collect_data(other.collect_data)
+, sample_(std::move(other.sample_))
 , marker_(std::move(other.marker_))
 , sample_size_(other.sample_size_)
 , marker_size_(other.marker_size_)
@@ -46,6 +77,7 @@ Source & Source::operator = (const Source & other)
 {
 	if (this != &other)
 	{
+		this->collect_data = other.collect_data;
 		this->sample_ = other.sample_;
 		this->marker_ = other.marker_;
 		this->sample_size_ = other.sample_size_;
@@ -60,6 +92,7 @@ Source & Source::operator = (Source && other)
 {
 	if (this != &other)
 	{
+		this->collect_data = other.collect_data;
 		this->sample_.swap(other.sample_);
 		this->marker_.swap(other.marker_);
 		this->sample_size_ = other.sample_size_;
@@ -114,13 +147,18 @@ void Source::append(Marker && marker)
 	}
 	
 	// append data
-	for (size_t i = 0; i < this->sample_size_; ++i)
+	if (this->collect_data == CollectData::on_sample ||
+		this->collect_data == CollectData::on_both)
 	{
-		this->sample_[i].data.append(marker.data[i]);
+		for (size_t i = 0; i < this->sample_size_; ++i)
+		{
+			this->sample_[i].data.append(marker.data[i]);
+		}
 	}
 	
 	// remove marker data
-	marker.data.remove();
+	if (this->collect_data == CollectData::on_sample)
+		marker.data.remove();
 	
 	// append marker
 	this->marker_.push_back(std::move(marker)); // move
@@ -207,18 +245,11 @@ void Source::finish(const int threads)
 		throw std::runtime_error("No sample data provided");
 	}
 	
-	std::cout << std::endl << "Allocating data" << std::endl;
-	ProgressBar progress(this->sample_size_);
-	
 	// finish sample data
 	for (std::vector<Sample>::iterator it = this->sample_.begin(), end = this->sample_.end(); it != end; ++it)
 	{
-		progress.update();
-		
 		it->data.finish();
 	}
-	
-	progress.finish();
 	
 	// sort marker data
 	this->sort(threads);
@@ -226,18 +257,14 @@ void Source::finish(const int threads)
 	this->finished = true;
 }
 
-void Source::sort_subsample(const std::vector<size_t> & subsample, const std::vector<size_t> & order, ProgressBar & progress)
+void Source::sort_subsample(const std::vector<size_t> & subsample, const std::vector<size_t> & order)
 {
-	thread_local const size_t n_subsample = subsample.size();
-	thread_local const size_t n_order     = order.size();
-	thread_local SampleData data;
+	const size_t n_subsample = subsample.size();
+	const size_t n_order     = order.size();
+	SampleData data;
 	
 	for (size_t i = 0; i < n_subsample; ++i)
 	{
-		this->ex_sort.lock();
-		progress.update();
-		this->ex_sort.unlock();
-		
 		data = SampleData();
 		
 		for (size_t k = 0; k < n_order; ++k)
@@ -290,34 +317,33 @@ void Source::sort(const int threads)
 	std::sort(this->marker_.begin(), this->marker_.end());
 	
 	// sort data in each sample
-	std::vector<std::thread> t;
-	std::vector< std::vector<size_t> > subsample(threads);
-	
-	std::cout << std::endl << "Sorting data" << std::endl;
-	ProgressBar progress(this->sample_size_);
-	
-	int k = 0;
-	for (i = 0; i < this->sample_size_; ++i)
+	if (this->collect_data == CollectData::on_sample ||
+		this->collect_data == CollectData::on_both)
 	{
-		subsample[k++].push_back(i);
+		std::vector<std::thread> t;
+		std::vector< std::vector<size_t> > subsample(threads);
 		
-		if (k == threads)
-			k = 0;
+		int k = 0;
+		for (i = 0; i < this->sample_size_; ++i)
+		{
+			subsample[k++].push_back(i);
+			
+			if (k == threads)
+				k = 0;
+		}
+		
+		for (k = 1; k < threads; ++k)
+		{
+			t.push_back(std::thread(&Source::sort_subsample, this, subsample[k], order));
+		}
+		
+		this->sort_subsample(subsample[0], order);
+		
+		for (std::thread & _t : t)
+		{
+			_t.join();
+		}
 	}
-	
-	for (k = 1; k < threads; ++k)
-	{
-		t.push_back(std::thread(&Source::sort_subsample, this, subsample[k], order, std::ref(progress)));
-	}
-	
-	this->sort_subsample(subsample[0], order, progress);
-	
-	for (std::thread & _t : t)
-	{
-		_t.join();
-	}
-	
-	progress.finish();
 }
 
 

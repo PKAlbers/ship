@@ -48,7 +48,7 @@ public:
 		return (this->value == Chromosome::unknown);
 	}
 	
-	// cast
+	// cast int
 	operator int () const
 	{
 		return static_cast<int>(this->value);
@@ -70,6 +70,17 @@ public:
 		}
 		
 		return (this->value == other.value);
+	}
+	
+	// convert to string
+	std::string str() const
+	{
+		if (this->value == Chromosome::unknown)
+		{
+			return std::string(".");
+		}
+		
+		return std::to_string(this->value);
 	}
 	
 	// assign
@@ -101,7 +112,7 @@ public:
 // Haplotype element
 //
 
-#define HAPLOTYPE_MAX 14 // = 15 (00001111) - 1 (reserved for unknown)
+#define HAPLOTYPE_MAX 14 // = 15 (00001111) - 1 ('15' reserved for unknown)
 
 class Haplotype
 {
@@ -119,10 +130,10 @@ public:
 		return (this->value == Haplotype::unknown);
 	}
 	
-	// cast
+	// cast int
 	operator int () const
 	{
-		return (this->value == Haplotype::unknown) ? -1: static_cast<int>(this->value);
+		return static_cast<int>(this->value);
 	}
 	
 	// compare/sort
@@ -130,6 +141,17 @@ public:
 	bool operator >  (const Haplotype & other) const { return (this->value >  other.value); }
 	bool operator == (const Haplotype & other) const { return (this->value == other.value); }
 	bool operator != (const Haplotype & other) const { return (this->value != other.value); }
+	
+	// convert to string
+	std::string str() const
+	{
+		if (this->value == Haplotype::unknown)
+		{
+			return std::string(".");
+		}
+		
+		return std::to_string(this->value);
+	}
 	
 	// assign
 	Haplotype & operator = (const Haplotype & other)

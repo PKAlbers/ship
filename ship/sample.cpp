@@ -90,7 +90,7 @@ void SampleData::append(const Genotype & g)
 	}
 	
 	this->current->block[i] = g;
-	this->current->i += 1;
+	++this->current->i;
 }
 
 void SampleData::finish()
@@ -165,12 +165,12 @@ void SampleData::print(std::ostream & stream, const char last) const
 #endif
 	
 	Genotype g = (Genotype)this->data[0];
-	stream << (int)g.h0 << ' ' << (int)g.h1;
+	stream << g.h0.str() << ' ' << g.h1.str();
 	
 	for (size_t i = 1; i < this->n; ++i)
 	{
 		g = (Genotype)this->data[i];
-		stream << ' ' << (int)g.h0 << ' ' << (int)g.h1;
+		stream << ' ' << g.h0.str() << ' ' << g.h1.str();
 	}
 	
 	if (last != '\0')
@@ -187,12 +187,12 @@ void SampleData::print(FILE * fp, const char last) const
 #endif
 	
 	Genotype g = (Genotype)this->data[0];
-	fprintf(fp, "%d %d", (int)g.h0, (int)g.h1);
+	fprintf(fp, "%s %s", g.h0.str().c_str(), g.h1.str().c_str());
 	
 	for (size_t i = 1; i < this->n; ++i)
 	{
 		g = (Genotype)this->data[i];
-		fprintf(fp, " %d %d", (int)g.h0, (int)g.h1);
+		fprintf(fp, " %s %s", g.h0.str().c_str(), g.h1.str().c_str());
 	}
 	
 	if (last != '\0')

@@ -650,7 +650,6 @@ void Input_VCF::source_marker(Source & source, ProgressMsg & progress)
 	thread_local std::string comment;
 	thread_local std::vector<char> current;
 	thread_local size_t line_num;
-	thread_local Marker marker(this->size);
 	
 	while(this->good)
 	{
@@ -676,23 +675,11 @@ void Input_VCF::source_marker(Source & source, ProgressMsg & progress)
 		
 		this->ex_line.unlock();
 		
-		marker = Marker(this->size);
+		Marker marker(this->size);
 		
 		// parse marker
 		if (parse_vcf_line(&current[0], marker.info, marker.data, comment))
 		{
-//			std::unique_lock<std::mutex> ul_pos(this->ex_pos);
-//			
-//			// check unique position
-//			if (this->positions.count(marker.info.pos) != 0)
-//			{
-//				this->log("Duplicate marker position: " + std::to_string(marker.info.pos), line_num);
-//				continue;
-//			}
-//			this->positions.insert(marker.info.pos);
-//			
-//			ul_pos.unlock();
-
 			// remove skipped samples
 			if (this->skipsample.flag)
 			{

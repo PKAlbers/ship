@@ -38,7 +38,7 @@ class MarkerData
 {
 private:
 	
-	std::vector<Genotype> data; // genotype array
+	std::vector<Datatype> data; // genotype array
 	size_t n; // full size
 	size_t i; // increment for appending
 	bool contains_unknown_; // flag that data contains unknown haplotypes
@@ -46,7 +46,7 @@ private:
 public:
 	
 	// return genotype
-	const Genotype & operator [] (const size_t) const;
+	Genotype operator [] (const size_t) const;
 	
 	// check if array is completely filled
 	bool is_complete() const;

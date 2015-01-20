@@ -32,6 +32,14 @@ class Source
 {
 private:
 	
+	enum class CollectData
+	{
+		on_marker,
+		on_sample,
+		on_both
+	};
+	
+	CollectData collect_data; // memory allocation setting of data
 	Chromosome chromosome; // chromosome of source
 	std::vector<Sample> sample_; // list of samples & data
 	std::vector<Marker> marker_; // list of markers
@@ -41,8 +49,7 @@ private:
 	
 	// sort data matrix
 	void sort(const int);
-	void sort_subsample(const std::vector<size_t> &, const std::vector<size_t> &, ProgressBar &); // multi-threading enabled
-	std::mutex ex_sort;
+	void sort_subsample(const std::vector<size_t> &, const std::vector<size_t> &); // multi-threading enabled
 	
 public:
 	
@@ -70,7 +77,7 @@ public:
 	Source & operator = (Source &&);
 	
 	// construct
-	Source();
+	Source(const char);
 	Source(const Source &);
 	Source(Source &&);
 	

@@ -193,10 +193,9 @@ private:
 	std::vector<SampleInfo> _sample; // sample information
 	Genmap                  _genmap; // genetic map container
 	
-	std::unordered_set<size_t> positions; // unique set of read marker positions
 	SkipSample skipsample; // index of samples to skip
 	
-	std::mutex ex_line, ex_pos, ex_log, ex_source; // mutexes for multi-threading
+	std::mutex ex_line, ex_log, ex_source; // mutexes for multi-threading
 	bool good;
 	
 	void log(const std::string &, const size_t); // log warning message
